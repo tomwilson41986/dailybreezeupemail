@@ -1,0 +1,213 @@
+"""Racing Post results client, scoped to uid-matching.
+
+Given a set of ``horse_uid`` values, fetch today's results index from
+Racing Post, walk each race page, and emit one :class:`ResultHit` per
+matched runner.  No name-based matching: we join on the uid embedded in
+the profile/horse/<uid> anchor, which is authoritative.
+
+The parsers are pure so tests can drive them against captured fixtures.
+"""
+from __future__ import annotations
+
+import logging
+import re
+import time as wall
+from dataclasses import dataclass
+from datetime import date, time
+from typing import Iterable, Sequence
+
+import requests
+from lxml import html as lxml_html
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+log = logging.getLogger(__name__)
+
+BASE = "https://www.racingpost.com"
+
+_DOC_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-GB,en;q=0.9",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+_RESULT_PATH_RE = re.compile(r"/results/\d+/([a-z][a-z0-9-]*)/(\d{4}-\d{2}-\d{2})/(\d+)")
+_PROFILE_RE = re.compile(r"/profile/horse/(\d+)/([a-z0-9-]+)")
+_TIME_RE = re.compile(r"(\d{1,2})[:.](\d{2})")
+
+
+@dataclass(frozen=True)
+class ResultHit:
+    horse_uid: int
+    horse_slug: str
+    horse_name: str
+    course: str
+    race_date: date
+    off_time: time | None
+    race_name: str
+    finishing_position: str | None
+    sp: str | None
+    race_url: str
+    race_uid: str
+
+
+def _course_display(slug: str) -> str:
+    return " ".join(w.capitalize() for w in slug.split("-"))
+
+
+def _parse_off_time(title: str) -> time | None:
+    m = _TIME_RE.search(title or "")
+    if not m:
+        return None
+    hh, mm = int(m.group(1)), int(m.group(2))
+    if not (0 <= hh <= 23 and 0 <= mm <= 59):
+        return None
+    if 1 <= hh <= 10:
+        hh += 12
+    return time(hh, mm)
+
+
+def parse_results_index_race_urls(html_text: str, on: date) -> list[tuple[str, str, str]]:
+    """Return ``[(course_slug, race_uid, race_url), ...]`` for each race on the date."""
+    seen: set[str] = set()
+    out: list[tuple[str, str, str]] = []
+    for m in _RESULT_PATH_RE.finditer(html_text):
+        slug, d_str, race_id = m.groups()
+        if d_str != on.isoformat():
+            continue
+        if race_id in seen:
+            continue
+        seen.add(race_id)
+        out.append((slug, race_id, f"{BASE}{m.group(0)}"))
+    return out
+
+
+def parse_result_page_hits(
+    html_text: str,
+    *,
+    race_url: str,
+    race_uid: str,
+    course: str,
+    race_date: date,
+    target_uids: set[int],
+) -> list[ResultHit]:
+    """Scan a race page for profile/horse/<uid> where uid is in ``target_uids``."""
+    if not target_uids:
+        return []
+    doc = lxml_html.fromstring(html_text)
+    title_nodes = doc.xpath("//title/text()")
+    off_time = _parse_off_time(title_nodes[0]) if title_nodes else None
+    race_name_nodes = doc.xpath(
+        '//*[contains(@class,"rp-raceTimeCourseName__title")]//text()'
+    )
+    race_name = " ".join("".join(race_name_nodes).split()) if race_name_nodes else ""
+
+    hits: list[ResultHit] = []
+    for row in doc.xpath('//tr[contains(@class,"rp-horseTable__mainRow")]'):
+        anchors = row.xpath('.//a[contains(@href,"/profile/horse/")]/@href')
+        uid_match: tuple[int, str] | None = None
+        for href in anchors:
+            m = _PROFILE_RE.search(href)
+            if not m:
+                continue
+            uid = int(m.group(1))
+            if uid in target_uids:
+                uid_match = (uid, m.group(2))
+                break
+        if uid_match is None:
+            continue
+
+        uid, slug = uid_match
+        horse_el = row.xpath('.//*[contains(@class,"rp-horseTable__horse__name")]')
+        horse_name = " ".join(horse_el[0].text_content().split()) if horse_el else ""
+        pos_el = row.xpath('.//*[contains(@class,"rp-horseTable__pos__number")]/text()')
+        pos = pos_el[0].strip().split()[0] if pos_el and pos_el[0].strip() else None
+        sp_el = row.xpath('.//*[contains(@class,"rp-horseTable__horse__price")]/text()')
+        sp = " ".join("".join(sp_el).split()) or None
+
+        hits.append(
+            ResultHit(
+                horse_uid=uid,
+                horse_slug=slug,
+                horse_name=horse_name,
+                course=course,
+                race_date=race_date,
+                off_time=off_time,
+                race_name=race_name,
+                finishing_position=pos,
+                sp=sp,
+                race_url=race_url,
+                race_uid=race_uid,
+            )
+        )
+    return hits
+
+
+# ---------- live fetcher ----------
+
+
+def _make_session() -> requests.Session:
+    s = requests.Session()
+    s.headers.update(_DOC_HEADERS)
+    return s
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
+def _fetch(session: requests.Session, url: str) -> str:
+    r = session.get(url, timeout=30)
+    r.raise_for_status()
+    return r.text
+
+
+def fetch_hits_for_uids(
+    on: date,
+    target_uids: Iterable[int],
+    *,
+    sleep: float = 1.2,
+    session: requests.Session | None = None,
+) -> list[ResultHit]:
+    """Scrape today's RP results index and emit hits for any uid we care about."""
+    uids: set[int] = set(int(u) for u in target_uids)
+    if not uids:
+        return []
+    s = session or _make_session()
+    try:
+        index_html = _fetch(s, f"{BASE}/results/{on.isoformat()}")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("RP results index fetch failed (%s): %s", on, exc)
+        return []
+
+    races = parse_results_index_race_urls(index_html, on)
+    if not races:
+        log.info("RP results: no races on %s", on)
+        return []
+
+    hits: list[ResultHit] = []
+    for i, (slug, race_uid, url) in enumerate(races):
+        if i:
+            wall.sleep(sleep)
+        try:
+            page = _fetch(s, url)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("RP result page fetch failed (%s): %s", url, exc)
+            continue
+        try:
+            hits.extend(
+                parse_result_page_hits(
+                    page,
+                    race_url=url,
+                    race_uid=race_uid,
+                    course=_course_display(slug),
+                    race_date=on,
+                    target_uids=uids,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("RP result page parse failed (%s): %s", url, exc)
+    return hits

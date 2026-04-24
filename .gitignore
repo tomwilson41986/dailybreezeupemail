@@ -15,10 +15,8 @@ dist/
 .mypy_cache/
 .ruff_cache/
 
-# Run scratch
+# Run scratch (ephemeral: dedup log + preview, re-created on every run)
 data/cache/
 data/last_preview.html
 data/last_preview.txt
-
-# Keep the sqlite committed so the GH Actions job has the catalogue.
-!data/breezeup.sqlite
+data/breezeup.sqlite

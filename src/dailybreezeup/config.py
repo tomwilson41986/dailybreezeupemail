@@ -15,8 +15,6 @@ class Settings(BaseSettings):
     email_from: str = ""
     email_to: str = ""
 
-    sheet_url: str = ""
-
     notify_on_empty: bool = False
     db_path: Path = Field(default=Path("data/breezeup.sqlite"))
 

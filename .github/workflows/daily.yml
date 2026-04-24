@@ -27,7 +27,6 @@ jobs:
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
       EMAIL_FROM:         ${{ secrets.EMAIL_FROM }}
       EMAIL_TO:           ${{ secrets.EMAIL_TO }}
-      SHEET_URL:          ${{ secrets.SHEET_URL }}
       NOTIFY_ON_EMPTY:    ${{ vars.NOTIFY_ON_EMPTY || 'false' }}
 
     steps:
@@ -53,10 +52,6 @@ jobs:
               print(f"Skipping — not 07:00 UK local (now={now.isoformat()})")
               sys.exit(78)  # neutral "skipped" exit code, treated as success
           PY
-
-      - name: Refresh catalogue from sheet
-        if: env.SHEET_URL != ''
-        run: python -m dailybreezeup.seed --sheet "$SHEET_URL" -v
 
       - name: Run daily job
         run: |

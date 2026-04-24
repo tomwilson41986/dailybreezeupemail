@@ -1,10 +1,10 @@
-"""Daily job: gather races, match breeze-up graduates, send email.
+"""Daily job: pull every current breeze-up catalogue from Racing Post, flag
+any lot entered to run in the next 5 days, and any lot that ran today.
 
 Usage:
-  python -m dailybreezeup.daily                      # today UK, send
-  python -m dailybreezeup.daily --dry-run            # render only, no send
-  python -m dailybreezeup.daily --date 2026-04-24    # force a date
-  python -m dailybreezeup.daily --no-send            # skip send (same as --dry-run but still logs)
+  breezeup-daily                      # today UK, send
+  breezeup-daily --dry-run            # render preview, no send
+  breezeup-daily --date 2026-04-24    # force a date
 """
 from __future__ import annotations
 
@@ -13,7 +13,8 @@ import json
 import logging
 import sqlite3
 import sys
-from datetime import date, datetime, timezone
+from dataclasses import asdict
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -21,115 +22,118 @@ from zoneinfo import ZoneInfo
 from dailybreezeup.config import Settings, load as load_settings
 from dailybreezeup.db import session
 from dailybreezeup.emailer import EmailPayload, render, send
-from dailybreezeup.matching import MatchedHorse, RunnerToMatch, horse_key, match, normalize_name
-from dailybreezeup.models import RaceCard, RaceResult, Runner
-from dailybreezeup.racing import gather
+from dailybreezeup.racing import rp_results, rp_sales
 
 log = logging.getLogger("dailybreezeup.daily")
 UK = ZoneInfo("Europe/London")
 PREVIEW_HTML = Path("data/last_preview.html")
 PREVIEW_TXT = Path("data/last_preview.txt")
 
+ENTRIES_WINDOW_DAYS = 5  # today .. today + ENTRIES_WINDOW_DAYS inclusive
+
 
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _row_payload(card: RaceCard | RaceResult, runner: Runner, matched: MatchedHorse) -> dict[str, Any]:
-    return {
-        "horse": runner.horse,
-        "bred": runner.bred,
-        "sale_id": matched.sale_id,
-        "sale_name": matched.sale_name,
-        "vendor": matched.vendor,
-        "lot": matched.lot,
-        "year_foaled": matched.year_foaled,
-        "race_id": card.race_id,
-        "breeze_rating": matched.breeze_rating,
-        "precocity_rating": matched.precocity_rating,
-        "ot_rank": matched.ot_rank,
-        "ot_diff_m": matched.ot_diff_m,
-        "sl_1f": matched.sl_1f,
-        "sl_go": matched.sl_go,
-        "sheet_row_url": matched.sheet_row_url,
-        "price": matched.price,
-        "currency": matched.currency,
-        "withdrawn": matched.withdrawn,
-        "course": card.course,
-        "race_name": card.race_name,
-        "race_date": card.race_date,
-        "off_time": card.off_time,
-        "trainer": runner.trainer,
-        "jockey": runner.jockey,
-        "draw": runner.draw,
-        "finishing_position": runner.finishing_position,
-        "sp": runner.sp,
-        "race_url": card.url,
-    }
-
-
 def _json_default(o: Any) -> Any:
-    if isinstance(o, (date, datetime)):
+    if isinstance(o, (date, datetime, time)):
         return o.isoformat()
     raise TypeError(f"Unserialisable: {type(o)}")
 
 
+def _lot_row(lot: rp_sales.SaleLot, *, race_uid: str | None) -> dict[str, Any]:
+    """Flat dict used by both the email template and the dedup log."""
+    return {
+        "sale_name": lot.sale.sale_name,
+        "sale_co": lot.sale.sale_co,
+        "lot": lot.display_lot,
+        "lot_id": lot.lot_id,
+        "horse_uid": lot.horse_uid,
+        "horse_name": lot.horse_name,
+        "sire": lot.sire_name,
+        "dam": lot.dam_name,
+        "damsire": lot.sire_of_dam_name,
+        "sex": lot.sex,
+        "age": lot.age,
+        "seller": lot.seller,
+        "buyer": lot.buyer,
+        "price": lot.price_label,
+        "race_uid": race_uid,
+    }
+
+
+def _entered_row(lot: rp_sales.SaleLot) -> dict[str, Any]:
+    entry = lot.entry
+    assert entry is not None
+    base = _lot_row(lot, race_uid=str(entry.race_uid))
+    base.update({
+        "course": entry.course_name.title(),
+        "race_date": entry.race_date,
+        "race_url": (
+            f"https://www.racingpost.com/racecards/{entry.course_uid}/"
+            f"{entry.course_name.lower().replace(' ', '-')}/"
+            f"{entry.race_date.isoformat()}/{entry.race_uid}"
+        ),
+    })
+    return base
+
+
+def _ran_row(lot: rp_sales.SaleLot, hit: rp_results.ResultHit) -> dict[str, Any]:
+    base = _lot_row(lot, race_uid=hit.race_uid)
+    base.update({
+        "course": hit.course,
+        "race_date": hit.race_date,
+        "off_time": hit.off_time,
+        "race_name": hit.race_name,
+        "finishing_position": hit.finishing_position,
+        "sp": hit.sp,
+        "race_url": hit.race_url,
+        "horse_name": hit.horse_name or lot.horse_name,
+    })
+    return base
+
+
 def _classify(
-    conn: sqlite3.Connection,
     today: date,
-    gathered,
-) -> tuple[list[dict], list[dict], list[dict]]:
-    ran: list[dict] = []
-    declared: list[dict] = []
-    entered: list[dict] = []
+    lots: list[rp_sales.SaleLot],
+    results: list[rp_results.ResultHit],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    window_end = today + timedelta(days=ENTRIES_WINDOW_DAYS)
+    entered: list[dict[str, Any]] = []
+    for lot in lots:
+        if not (lot.entered and lot.entry):
+            continue
+        if not (today <= lot.entry.race_date <= window_end):
+            continue
+        entered.append(_entered_row(lot))
 
-    seen: set[tuple[str, str, str]] = set()  # (category, horse_key, race_id)
+    by_uid: dict[int, rp_sales.SaleLot] = {
+        lot.horse_uid: lot for lot in lots if lot.horse_uid is not None
+    }
+    ran: list[dict[str, Any]] = []
+    for hit in results:
+        lot = by_uid.get(hit.horse_uid)
+        if lot is None:
+            continue
+        ran.append(_ran_row(lot, hit))
 
-    def _match_card(card: RaceCard | RaceResult, bucket: list[dict], category: str) -> None:
-        for runner in card.runners:
-            to_match = RunnerToMatch(
-                name=runner.horse,
-                age=runner.age,
-                race_year=card.race_date.year,
-                sire=runner.sire,
-                dam=runner.dam,
-            )
-            matched = match(conn, to_match)
-            if not matched:
-                continue
-            key = horse_key(normalize_name(runner.horse), matched.year_foaled)
-            k = (category, key, card.race_id)
-            if k in seen:
-                continue
-            seen.add(k)
-            bucket.append(_row_payload(card, runner, matched))
-
-    for card in gathered.results:
-        _match_card(card, ran, "ran_yesterday")
-    for card in gathered.declarations:
-        _match_card(card, declared, "declared")
-    for card in gathered.entries:
-        _match_card(card, entered, "entered")
-
-    declared_keys = {(r["sale_id"], r["horse"], r["race_date"], r["off_time"]) for r in declared}
-    entered = [
-        r for r in entered
-        if (r["sale_id"], r["horse"], r["race_date"], r["off_time"]) not in declared_keys
-    ]
-
-    return ran, declared, entered
+    entered.sort(key=lambda r: (r["race_date"], r.get("course") or "", r["lot"]))
+    ran.sort(key=lambda r: (r.get("off_time") or time(0, 0), r.get("course") or "", r["lot"]))
+    return entered, ran
 
 
 def _filter_already_sent(
-    conn: sqlite3.Connection, run_date: date, category: str, rows: list[dict]
-) -> list[dict]:
-    fresh: list[dict] = []
+    conn: sqlite3.Connection,
+    today: date,
+    category: str,
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    fresh: list[dict[str, Any]] = []
     for row in rows:
-        key = horse_key(normalize_name(row["horse"]), row.get("year_foaled"))
-        race_id = row["race_id"]
         existing = conn.execute(
-            "SELECT 1 FROM email_log WHERE run_date=? AND category=? AND horse_key=? AND race_id=?",
-            (run_date.isoformat(), category, key, race_id),
+            "SELECT 1 FROM email_log WHERE run_date=? AND category=? AND lot_id=? AND race_uid=?",
+            (today.isoformat(), category, row["lot_id"], row["race_uid"] or ""),
         ).fetchone()
         if existing is None:
             fresh.append(row)
@@ -138,19 +142,27 @@ def _filter_already_sent(
 
 def _log_send(
     conn: sqlite3.Connection,
-    run_date: date,
-    categorised: dict[str, list[dict]],
+    today: date,
+    entered: list[dict[str, Any]],
+    ran: list[dict[str, Any]],
 ) -> None:
     now = _utcnow()
-    for category, rows in categorised.items():
+    for category, rows in (("entered", entered), ("ran_today", ran)):
         for row in rows:
-            key = horse_key(normalize_name(row["horse"]), row.get("year_foaled"))
             conn.execute(
                 """
-                INSERT OR IGNORE INTO email_log (run_date, category, horse_key, race_id, payload_json, sent_at)
+                INSERT OR IGNORE INTO email_log
+                    (run_date, category, lot_id, race_uid, payload_json, sent_at)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (run_date.isoformat(), category, key, row["race_id"], json.dumps(row, default=_json_default), now),
+                (
+                    today.isoformat(),
+                    category,
+                    row["lot_id"],
+                    row["race_uid"] or "",
+                    json.dumps(row, default=_json_default),
+                    now,
+                ),
             )
 
 
@@ -176,48 +188,57 @@ def run(
         )
         run_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
-        catalogue_count = conn.execute("SELECT COUNT(*) FROM catalogue_entries").fetchone()[0]
-        if catalogue_count == 0:
-            log.warning("Catalogue is empty. Run `python -m dailybreezeup.seed --all --years %d` first.", today.year)
+        log.info("Discovering breeze-up sales for %d", today.year)
+        sales = rp_sales.discover_sales(today.year)
+        log.info("Sales found: %d", len(sales))
+        for s in sales:
+            log.info("  %s  (%s %s)", s.sale_name, s.sale_date.isoformat(), s.venue_uid)
 
-        gathered = gather(today)
-        ran, declared, entered = _classify(conn, today, gathered)
+        all_lots: list[rp_sales.SaleLot] = []
+        for sale in sales:
+            lots = rp_sales.fetch_lots(sale)
+            log.info("  %s: %d lots (entered=%d)",
+                     sale.sale_name, len(lots), sum(1 for lot in lots if lot.entered))
+            all_lots.extend(lots)
 
-        ran = _filter_already_sent(conn, today, "ran_yesterday", ran)
-        declared = _filter_already_sent(conn, today, "declared", declared)
+        uids = {lot.horse_uid for lot in all_lots if lot.horse_uid is not None}
+        log.info("Horse uids across all catalogues: %d", len(uids))
+
+        hits: list[rp_results.ResultHit] = []
+        if uids:
+            hits = rp_results.fetch_hits_for_uids(today, uids)
+            log.info("Result hits for today: %d", len(hits))
+
+        entered, ran = _classify(today, all_lots, hits)
+
         entered = _filter_already_sent(conn, today, "entered", entered)
+        ran = _filter_already_sent(conn, today, "ran_today", ran)
 
-        payload = render(
-            run_date=today,
-            ran_yesterday=ran,
-            declared=declared,
-            entered=entered,
-        )
+        payload = render(run_date=today, entered=entered, ran_today=ran)
         _write_preview(payload)
 
+        total = len(entered) + len(ran)
         summary = {
-            "catalogue_count": catalogue_count,
-            "ran_yesterday": len(ran),
-            "declared": len(declared),
-            "entered": len(entered),
-            "races_declared": len(gathered.declarations),
-            "races_entered": len(gathered.entries),
-            "races_results": len(gathered.results),
+            "sales": len(sales),
+            "lots": len(all_lots),
+            "uids": len(uids),
+            "entered_in_window": len(entered),
+            "ran_today": len(ran),
         }
         log.info("summary: %s", summary)
 
-        total = len(ran) + len(declared) + len(entered)
         will_send = not (dry_run or no_send)
         if will_send and (total > 0 or settings.notify_on_empty):
             try:
                 send(payload, settings)
-                _log_send(conn, today, {"ran_yesterday": ran, "declared": declared, "entered": entered})
+                _log_send(conn, today, entered, ran)
                 status = "ok"
             except Exception as exc:  # noqa: BLE001
                 log.exception("email send failed: %s", exc)
                 status = "failed"
         else:
-            log.info("skipping send (dry_run=%s, no_send=%s, total=%d)", dry_run, no_send, total)
+            log.info("skipping send (dry_run=%s, no_send=%s, total=%d)",
+                     dry_run, no_send, total)
             status = "dry_run" if (dry_run or no_send) else "ok"
 
         conn.execute(
@@ -230,9 +251,10 @@ def run(
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="breezeup-daily")
-    ap.add_argument("--date", type=date.fromisoformat, default=None, help="YYYY-MM-DD (default: today UK)")
+    ap.add_argument("--date", type=date.fromisoformat, default=None,
+                    help="YYYY-MM-DD (default: today UK)")
     ap.add_argument("--dry-run", action="store_true", help="Render preview but don't send")
-    ap.add_argument("--no-send", action="store_true", help="Alias for --dry-run (kept separate for scripting)")
+    ap.add_argument("--no-send", action="store_true", help="Alias for --dry-run")
     ap.add_argument("-v", "--verbose", action="count", default=0)
     args = ap.parse_args(argv)
 

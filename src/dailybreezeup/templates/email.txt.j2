@@ -1,44 +1,34 @@
-Breeze-up graduates running — {{ run_date.strftime("%A %d %B %Y") }}
+Breeze-up graduates — {{ run_date.strftime("%A %d %B %Y") }}
 {{ total }} horse{{ '' if total == 1 else 's' }}
 
 {% macro block(row) -%}
-{{ row.horse }}{% if row.bred %} ({{ row.bred }}){% endif %}
-{% if row.sire or row.dam %}  {{ row.sire or '?' }} × {{ row.dam or '?' }}
+{{ row.horse_name or ('Lot ' ~ row.lot ~ ' (unnamed)') }}
+  {% if row.sire or row.dam %}{{ row.sire or '?' }} x {{ row.dam or '?' }}{% if row.damsire %} ({{ row.damsire }}){% endif %}
 {% endif %}
-  Sale: {{ row.sale_name }}{% if row.lot %} · Lot {{ row.lot }}{% endif %}{% if row.price %} · {{ '£' if row.currency == 'GBP' else '€' }}{{ '{:,}'.format(row.price) }}{% endif %}{% if row.withdrawn %} · (withdrawn){% endif %}
-{% if row.breeze_rating or row.precocity_rating or row.ot_rank %}  Ratings: {% if row.breeze_rating %}BR {{ row.breeze_rating }}  {% endif %}{% if row.precocity_rating %}PR {{ row.precocity_rating }}  {% endif %}{% if row.ot_rank %}OT rank {{ row.ot_rank }}  {% endif %}{% if row.sl_1f %}1F {{ row.sl_1f }}{% endif %}
-{% endif %}
-{% if row.sheet_row_url %}  Lot page: {{ row.sheet_row_url }}
-{% endif %}
+  Sale: {{ row.sale_name }} / Lot {{ row.lot }}{% if row.price %} / {{ row.price }}{% endif %}{% if row.buyer %} / {{ row.buyer }}{% endif %}
 {%- endmacro %}
 
-{% if ran_yesterday %}
-==== RAN YESTERDAY ({{ ran_yesterday|length }}) ====
-{% for row in ran_yesterday %}
-{{ block(row) }}  {{ row.course }}{% if row.off_time %} · {{ row.off_time.strftime("%H:%M") }}{% endif %} · {{ row.race_name }}
-  Finish: {{ row.finishing_position or '-' }}   SP: {{ row.sp or '-' }}   Trainer: {{ row.trainer or '' }}
-
-{% endfor %}
-{% endif %}
-
-{% if declared %}
-==== DECLARED TODAY / TOMORROW ({{ declared|length }}) ====
-{% for row in declared %}
-{{ block(row) }}  {{ row.race_date.strftime("%a %d %b") }}{% if row.off_time %} · {{ row.off_time.strftime("%H:%M") }}{% endif %} · {{ row.course }} · {{ row.race_name }}
-  Trainer: {{ row.trainer or '' }}   Jockey: {{ row.jockey or '' }}   Draw: {{ row.draw or '' }}
+{% if ran_today %}
+==== RAN TODAY ({{ ran_today|length }}) ====
+{% for row in ran_today %}
+{{ block(row) }}
+  {{ row.course }}{% if row.off_time %} {{ row.off_time.strftime("%H:%M") }}{% endif %} - {{ row.race_name }}
+  Finish: {{ row.finishing_position or '-' }}   SP: {{ row.sp or '-' }}
+  {{ row.race_url }}
 
 {% endfor %}
 {% endif %}
 
 {% if entered %}
-==== ENTERED (NEXT 7 DAYS) ({{ entered|length }}) ====
+==== ENTERED IN NEXT 5 DAYS ({{ entered|length }}) ====
 {% for row in entered %}
-{{ block(row) }}  {{ row.race_date.strftime("%a %d %b") }} · {{ row.course }} · {{ row.race_name }}
-  Trainer: {{ row.trainer or '' }}
+{{ block(row) }}
+  {{ row.race_date.strftime("%a %d %b") }} - {{ row.course }}
+  {{ row.race_url }}
 
 {% endfor %}
 {% endif %}
 
 {% if total == 0 %}
-No breeze-up graduates matched today's cards.
+No breeze-up graduates ran today and none are entered in the next 5 days.
 {% endif %}

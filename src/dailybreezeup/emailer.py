@@ -34,19 +34,20 @@ def _env() -> Environment:
 def render(
     *,
     run_date: date,
-    ran_yesterday: list[dict[str, Any]],
-    declared: list[dict[str, Any]],
     entered: list[dict[str, Any]],
+    ran_today: list[dict[str, Any]],
 ) -> EmailPayload:
     env = _env()
-    total = len(ran_yesterday) + len(declared) + len(entered)
-    subject = f"Breeze-up graduates — {run_date:%a %d %b %Y} ({total} horse{'' if total == 1 else 's'})"
+    total = len(entered) + len(ran_today)
+    subject = (
+        f"Breeze-up graduates — {run_date:%a %d %b %Y} "
+        f"({total} horse{'' if total == 1 else 's'})"
+    )
     context = {
         "run_date": run_date,
         "total": total,
-        "ran_yesterday": ran_yesterday,
-        "declared": declared,
         "entered": entered,
+        "ran_today": ran_today,
         "subject": subject,
     }
     html = env.get_template("email.html.j2").render(**context)

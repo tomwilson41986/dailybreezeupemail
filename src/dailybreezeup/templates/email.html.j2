@@ -6,84 +6,50 @@
 </head>
 <body style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#222;background:#f7f7f5;margin:0;padding:20px;">
   <div style="max-width:860px;margin:0 auto;background:#fff;border:1px solid #e3e3de;padding:24px;">
-    <h1 style="margin:0 0 4px 0;font-size:20px;">Breeze-up graduates running</h1>
+    <h1 style="margin:0 0 4px 0;font-size:20px;">Breeze-up graduates</h1>
     <p style="margin:0 0 24px 0;color:#666;font-size:13px;">
       {{ run_date.strftime("%A %d %B %Y") }} &middot; {{ total }} horse{{ '' if total == 1 else 's' }}
     </p>
 
     {% macro horse_cell(row) -%}
-      <strong>{{ row.horse }}</strong>{% if row.bred %} ({{ row.bred }}){% endif %}
+      <strong>{{ row.horse_name or ('Lot ' ~ row.lot ~ ' (unnamed)') }}</strong>
       <div style="color:#555;font-size:11px;margin-top:2px;">
-        {% if row.sire %}{{ row.sire }}{% endif %}{% if row.dam %} × {{ row.dam }}{% endif %}
+        {% if row.sire %}{{ row.sire }}{% endif %}{% if row.dam %} &times; {{ row.dam }}{% endif %}{% if row.damsire %} ({{ row.damsire }}){% endif %}
       </div>
     {%- endmacro %}
 
     {% macro sale_cell(row) -%}
-      {% if row.sheet_row_url %}<a href="{{ row.sheet_row_url }}" style="color:#1a5fb4;text-decoration:none;">{{ row.sale_name }}</a>{% else %}{{ row.sale_name }}{% endif %}
-      {% if row.lot %} · Lot {{ row.lot }}{% endif %}
-      {% if row.price %} · {{ '£' if row.currency == 'GBP' else '€' }}{{ '{:,}'.format(row.price) }}{% endif %}
-      {% if row.withdrawn %} · (withdrawn){% endif %}
-    {%- endmacro %}
-
-    {% macro ratings_cell(row) -%}
-      <div style="font-size:11px;color:#555;">
-        {% if row.breeze_rating %}<span title="Breeze Rating" style="background:#faf0d0;padding:1px 4px;border-radius:3px;">BR {{ row.breeze_rating }}</span>{% endif %}
-        {% if row.precocity_rating %}<span title="Precocity Rating" style="background:#e8f0fa;padding:1px 4px;border-radius:3px;margin-left:4px;">PR {{ row.precocity_rating }}</span>{% endif %}
-        {% if row.ot_rank %}<span title="Optical Timing Rank" style="margin-left:4px;">OT {{ row.ot_rank }}</span>{% endif %}
-        {% if row.sl_1f %}<span title="Straight Line 1F time" style="margin-left:4px;">1F {{ row.sl_1f }}</span>{% endif %}
+      {{ row.sale_name }}
+      <div style="color:#555;font-size:11px;margin-top:2px;">
+        Lot {{ row.lot }}{% if row.price %} &middot; {{ row.price }}{% endif %}{% if row.buyer %} &middot; {{ row.buyer }}{% endif %}
       </div>
     {%- endmacro %}
 
-    {% if ran_yesterday %}
-    <h2 style="font-size:16px;border-bottom:1px solid #e3e3de;padding-bottom:6px;">Ran yesterday ({{ ran_yesterday|length }})</h2>
+    {% if ran_today %}
+    <h2 style="font-size:16px;border-bottom:1px solid #e3e3de;padding-bottom:6px;">Ran today ({{ ran_today|length }})</h2>
     <table width="100%" cellspacing="0" cellpadding="8" style="border-collapse:collapse;font-size:13px;margin-bottom:24px;">
       <thead>
         <tr style="background:#faf7f0;">
           <th align="left">Horse</th>
-          <th align="left">Sale / ratings</th>
-          <th align="left">Course / race</th>
+          <th align="left">Sale</th>
+          <th align="left">Race</th>
           <th align="left">Finish</th>
           <th align="left">SP</th>
-          <th align="left">Trainer</th>
         </tr>
       </thead>
       <tbody>
-      {% for row in ran_yesterday %}
+      {% for row in ran_today %}
         <tr style="border-top:1px solid #eee;vertical-align:top;">
           <td>{{ horse_cell(row) }}</td>
-          <td>{{ sale_cell(row) }}{{ ratings_cell(row) }}</td>
-          <td>{{ row.course }}<div style="color:#555;font-size:11px;">{% if row.off_time %}{{ row.off_time.strftime("%H:%M") }} {% endif %}{{ row.race_name }}</div></td>
+          <td>{{ sale_cell(row) }}</td>
+          <td>
+            <a href="{{ row.race_url }}" style="color:#1a5fb4;text-decoration:none;">
+              {% if row.off_time %}{{ row.off_time.strftime("%H:%M") }} {% endif %}{{ row.course }}
+            </a>
+            <div style="color:#555;font-size:11px;">{{ row.race_name }}</div>
+          </td>
           <td><strong>{{ row.finishing_position or '-' }}</strong></td>
           <td>{{ row.sp or '-' }}</td>
-          <td>{{ row.trainer or '' }}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    {% endif %}
-
-    {% if declared %}
-    <h2 style="font-size:16px;border-bottom:1px solid #e3e3de;padding-bottom:6px;">Declared today / tomorrow ({{ declared|length }})</h2>
-    <table width="100%" cellspacing="0" cellpadding="8" style="border-collapse:collapse;font-size:13px;margin-bottom:24px;">
-      <thead>
-        <tr style="background:#faf7f0;">
-          <th align="left">Horse</th>
-          <th align="left">Sale / ratings</th>
-          <th align="left">When / where</th>
-          <th align="left">Trainer</th>
-          <th align="left">Jockey</th>
-          <th align="left">Draw</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for row in declared %}
-        <tr style="border-top:1px solid #eee;vertical-align:top;">
-          <td>{{ horse_cell(row) }}</td>
-          <td>{{ sale_cell(row) }}{{ ratings_cell(row) }}</td>
-          <td>{{ row.race_date.strftime("%a %d %b") }}{% if row.off_time %} {{ row.off_time.strftime("%H:%M") }}{% endif %}<div style="color:#555;font-size:11px;">{{ row.course }} · {{ row.race_name }}</div></td>
-          <td>{{ row.trainer or '' }}</td>
-          <td>{{ row.jockey or '' }}</td>
-          <td>{{ row.draw or '' }}</td>
         </tr>
       {% endfor %}
       </tbody>
@@ -91,23 +57,25 @@
     {% endif %}
 
     {% if entered %}
-    <h2 style="font-size:16px;border-bottom:1px solid #e3e3de;padding-bottom:6px;">Entered (next 7 days) ({{ entered|length }})</h2>
+    <h2 style="font-size:16px;border-bottom:1px solid #e3e3de;padding-bottom:6px;">Entered in the next 5 days ({{ entered|length }})</h2>
     <table width="100%" cellspacing="0" cellpadding="8" style="border-collapse:collapse;font-size:13px;margin-bottom:24px;">
       <thead>
         <tr style="background:#faf7f0;">
           <th align="left">Horse</th>
-          <th align="left">Sale / ratings</th>
-          <th align="left">When / where</th>
-          <th align="left">Trainer</th>
+          <th align="left">Sale</th>
+          <th align="left">When</th>
+          <th align="left">Course</th>
         </tr>
       </thead>
       <tbody>
       {% for row in entered %}
         <tr style="border-top:1px solid #eee;vertical-align:top;">
           <td>{{ horse_cell(row) }}</td>
-          <td>{{ sale_cell(row) }}{{ ratings_cell(row) }}</td>
-          <td>{{ row.race_date.strftime("%a %d %b") }}<div style="color:#555;font-size:11px;">{{ row.course }} · {{ row.race_name }}</div></td>
-          <td>{{ row.trainer or '' }}</td>
+          <td>{{ sale_cell(row) }}</td>
+          <td>{{ row.race_date.strftime("%a %d %b") }}</td>
+          <td>
+            <a href="{{ row.race_url }}" style="color:#1a5fb4;text-decoration:none;">{{ row.course }}</a>
+          </td>
         </tr>
       {% endfor %}
       </tbody>
@@ -115,11 +83,11 @@
     {% endif %}
 
     {% if total == 0 %}
-    <p style="color:#666;">No breeze-up graduates matched today's cards.</p>
+    <p style="color:#666;">No breeze-up graduates ran today and none are entered in the next 5 days.</p>
     {% endif %}
 
     <p style="margin-top:32px;color:#999;font-size:11px;">
-      Sent by dailybreezeup. Matching by sire + dam + foal year against your sale-lot sheet. Click the sale name to open the lot row in the sheet.
+      Sent by dailybreezeup. Sourced from Racing Post bloodstock sale catalogues (entries flag, matched by horse_uid on results).
     </p>
   </div>
 </body>

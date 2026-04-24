@@ -1,39 +1,27 @@
 # Daily Breeze-Up Email
 
-A once-a-day email listing horses that have an **entry**, **declaration**, or **result** in UK / Ireland / France racing **and** were originally sold at a breeze-up sale, with your own per-lot ratings linked through to the source sheet.
-
-Coverage (v1, 2026):
-
-- **UK**: Tattersalls Craven Breeze Up, Tattersalls Guineas Breeze Up, Goffs UK Breeze Up (Doncaster)
-- **IRE**: Goffs Breeze Up Sale (Kildare)
-- **FR**: Arqana Breeze Up (Deauville)
+A once-a-day email listing breeze-up sale graduates that either **ran today** or are **entered to run in the next 5 days**. Source is Racing Post's bloodstock sale catalogue (the authoritative join between a lot and its race entry).
 
 ## How it works
 
-1. **You** maintain a Google Sheet (shared as "anyone with the link can view") with one row per lot. Columns: `Year, Sale, Lot, Sex, Sire, Dam, Vendor, Buyer, Price, OT Diff/M, OT Rank, SL 1F, SL GO, Breeze Rating, Precocity Rating` (and an optional `Horse` column — safe to leave empty for unnamed breeze-up juveniles).
-2. **Seed**: `breezeup-seed --sheet <URL>` pulls the sheet via the CSV export endpoint and upserts each row into a local SQLite catalogue (`data/breezeup.sqlite`).
-3. **Daily** (GitHub Actions, 07:00 UK):
-   - scrapes today's + tomorrow's racecards and today+2..today+7 entries from `racingpost.com` (GB/IRE) and `france-galop.com` (FR);
-   - scrapes yesterday's results from the same sources;
-   - **matches** each runner against the catalogue. Primary key is `(sire, dam, foal year)` because breeze-up horses are generally unnamed at sale. Horse name is used when present;
-   - renders an HTML+plaintext email with your custom columns (Breeze Rating, Precocity Rating, OT Rank, SL 1F) embedded, and a deeplink to the specific sheet row;
-   - sends via **Gmail SMTP** (using an app password) and logs the send to avoid duplicates on re-runs.
+1. **Discover sales**: fetch `https://www.racingpost.com/bloodstock/sales/catalogues/` and filter to sale records whose name matches /breeze.?up/i in the current calendar year. Typical 2026 set: Tattersalls Craven, Goffs UK 2yo Breeze Up, Arqana May 2yo Breeze Up, Tattersalls Ireland Breeze Up.
+2. **Fetch lots per sale**: paginate `.../catalogues/<venue_uid>/<YYYY-MM-DD>/data.json`. Each row is one catalogued lot with an `entered` flag and, if entered, an `entry_details` pointer to the race (course + date + race_uid).
+3. **Classify**:
+   - **Entered (next 5 days)**: rows where `entered=true` AND `entry_details.race_date` is between today and today+5 inclusive.
+   - **Ran today**: collect every `horse_uid` across all catalogues, fetch `/results/<today>`, walk each race page, and emit one row per `/profile/horse/<uid>` link whose uid is in our set.
+4. **Render** HTML + plain-text email, send via Gmail SMTP, log to `email_log` to dedup re-runs within the day.
+
+The catalogue JSON is authoritative: Racing Post does the lot → horse → race join for us. We don't match by name (breeze-up lots are usually unnamed at sale time anyway).
 
 ## Local setup
 
 ```bash
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e .[dev]
-cp .env.example .env        # fill in keys + SHEET_URL
+cp .env.example .env        # fill in Gmail app password + recipient
 ```
 
-Seed the catalogue from your sheet:
-
-```bash
-breezeup-seed --sheet "$SHEET_URL" -v
-```
-
-Dry-run the daily job (no email sent, preview written to `data/last_preview.html`):
+Dry-run the job (no email sent; preview in `data/last_preview.html`):
 
 ```bash
 breezeup-daily --dry-run
@@ -61,61 +49,34 @@ pytest
 | `GMAIL_APP_PASSWORD` | 16-char [app password](https://myaccount.google.com/apppasswords) (requires 2FA on the account) |
 | `EMAIL_FROM` | Optional. Defaults to `GMAIL_USER`. Must be an alias of the Gmail account or Gmail will rewrite it. |
 | `EMAIL_TO` | Recipient(s), comma-separated |
-| `SHEET_URL` | Google Sheet share link (must be "anyone with link can view") |
 
-Gmail's SMTP limits: ~500 recipients/day on a consumer account, ~2,000/day on Workspace. For this job, one send/day to a small recipient list, you're nowhere near the limit. Optional repo **variable** `NOTIFY_ON_EMPTY=true` sends a "no hits" email even on quiet days.
-
-## Sheet schema
-
-Expected columns (case-insensitive, any order; unknown columns are ignored):
-
-| Column | Required | Notes |
-| --- | --- | --- |
-| `Year` | ✅ | Four-digit sale year, e.g. `2026` |
-| `Sale` | ✅ | One of: `Craven`, `Guineas`, `Goffs UK` (or `Doncaster`), `Goffs Ireland` (or `Goffs`), `Arqana` (or `Deauville`). Extend `sheet.SALE_MAPPING` to add more. |
-| `Lot` | ✅ | Lot number, possibly with a suffix e.g. `123A` |
-| `Sire` | ✅ | Matcher uses this + Dam + foal year |
-| `Dam` | ✅ | |
-| `Horse` | ➖ | Optional — add once a horse gets named |
-| `Sex`, `Vendor`, `Buyer`, `Price` | ➖ | Displayed |
-| `OT Diff/M`, `OT Rank`, `SL 1F`, `SL GO` | ➖ | Displayed as ratings block |
-| `Breeze Rating`, `Precocity Rating` | ➖ | Displayed as highlighted tags |
-
-Foal year is derived automatically as `Year - 2` (all breeze-up horses are 2yos at sale).
+Gmail's SMTP limits: ~500 recipients/day on a consumer account, ~2,000/day on Workspace. One send/day to a small recipient list is nowhere near that. Optional repo **variable** `NOTIFY_ON_EMPTY=true` sends a "nothing today" email even on quiet days.
 
 ## Project layout
 
 ```
 src/dailybreezeup/
-  daily.py            # main entrypoint (cron target)
-  seed.py             # catalogue seeder CLI (--sheet | --all | --sale | --vendor)
-  sheet.py            # Google Sheet CSV ingestor
-  matching.py         # normalize_name, horse_key, match()
-  emailer.py          # Gmail SMTP + Jinja render
-  schema.sql          # SQLite DDL
-  db.py               # connection + migrate()
-  config.py           # env loader (pydantic-settings)
-  models/             # pydantic: Sale, RawLot, RaceCard, Runner
+  daily.py              # main entrypoint (cron target)
+  emailer.py            # Gmail SMTP sender + Jinja render
+  schema.sql            # SQLite DDL (email_log + run_log)
+  db.py                 # connection + migrate()
+  config.py             # env loader (pydantic-settings)
   racing/
-    racingpost.py     # GB/IRE racecards + results scraped from racingpost.com
-    francegalop.py    # FR racecards + results scraped
-    common.py         # shared HTTP session with retries
-  scrapers/           # fallback: per-vendor catalogue scrapers
-    tattersalls.py goffs_uk.py goffs_ie.py arqana.py
+    rp_sales.py         # sale discovery + lot fetcher (JSON)
+    rp_results.py       # uid-joined today's results scraper
   templates/
     email.html.j2 email.txt.j2
 .github/workflows/
-  daily.yml                    # 07:00 UK cron — re-seeds from sheet, then sends
-  weekly-catalogue-refresh.yml # Sundays, vendor-scraper fallback
+  daily.yml             # 07:00 UK cron
 data/
-  breezeup.sqlite     # committed — the source of truth for cron runs
+  breezeup.sqlite       # committed — run_log + email_log for dedup
 tests/
+  fixtures/racingpost/  # captured live HTML/JSON for offline parser tests
 ```
 
-## Open questions / known gaps
+## Caveats
 
-- **France Galop selectors unverified** — `src/dailybreezeup/racing/francegalop.py::SELECTORS`. Iterate locally if FR cards don't populate.
-- **Racing Post scraping is against their ToS**, and they sit behind Fastly/Akamai bot rules. The scraper uses browser-like headers and a 1.2s delay between race-page fetches (~2-3 min per run), but there's no guarantee RP won't add a harder block. Monitor logs; if the index request stops returning runners, update `_BROWSER_HEADERS` or course slug sets in `racing/racingpost.py`.
-- **Sale name mapping**: if you use a sale label not in `sheet.SALE_MAPPING`, the seed script logs and skips it. Add new entries there.
-- **Vendor scrapers** (`scrapers/`) ship with unverified CSS selectors and are optional — the sheet is the primary source. Keep them if you want a daily cross-check against vendor sites.
-- **Matching precision**: `(sire, dam, foal_year)` uniquely identifies a horse except in the rare case of identical sire+dam half-siblings foaled the same year (e.g. twins, or full siblings born in different months of the same calendar year). Add a `Horse` column later to disambiguate.
+- **Scraping Racing Post is against their ToS.** The scraper uses browser-like headers, a warm-up request, and sleeps between per-race fetches. Monitor logs; if RP tightens their bot rules, adjust `_DOC_HEADERS` / `_XHR_HEADERS` in `racing/rp_sales.py` and `racing/rp_results.py`.
+- **Unregistered lots can't match results.** Only lots with a `horse_uid` in the sale catalogue are joinable against today's results. Most breeze-up 2yos stay unnamed (and thus unregistered in RP's horse DB) until their first run, at which point they get a uid. So this is a minor issue in practice: a horse that has run is, by definition, registered.
+- **Entries come from the catalogue itself**, not from a racecard scrape. This means the pipeline sees only entries RP has linked to a sale lot. If an entry exists on the BHA system but RP hasn't ingested it yet, we miss it — usually a lag of a few hours.
+- **France-only races**: RP's `/results/<date>` index is GB/IRE only. An Arqana graduate running at e.g. Deauville won't appear in our results. Their **entries** will still be picked up via the catalogue (the `entry_details.course_name` field covers French courses).
