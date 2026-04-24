@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dailybreezeup"
+version = "0.1.0"
+description = "Daily email listing UK/IRE/FR racing activity for breeze-up sale graduates"
+requires-python = ">=3.12"
+dependencies = [
+  "requests>=2.32",
+  "beautifulsoup4>=4.12",
+  "lxml>=5.2",
+  "jinja2>=3.1",
+  "python-dateutil>=2.9",
+  "pydantic>=2.7",
+  "pydantic-settings>=2.3",
+  "tenacity>=8.4",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "ruff>=0.5",
+  "mypy>=1.10",
+]
+
+[project.scripts]
+breezeup-daily = "dailybreezeup.daily:main"
+breezeup-seed = "dailybreezeup.seed:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+dailybreezeup = ["schema.sql", "templates/*.j2"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true

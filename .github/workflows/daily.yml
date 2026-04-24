@@ -1,0 +1,88 @@
+name: daily-breezeup-email
+
+on:
+  schedule:
+    # 07:00 UK local. We run both candidates and let the job no-op the wrong one.
+    - cron: "0 6 * * *"   # 07:00 BST (summer)
+    - cron: "0 7 * * *"   # 07:00 GMT (winter)
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "YYYY-MM-DD to process (default: today UK)"
+        required: false
+      dry_run:
+        description: "Render but do not send"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write  # so the job can commit an updated email_log to the db
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/London
+      THE_RACING_API_USER: ${{ secrets.THE_RACING_API_USER }}
+      THE_RACING_API_PASS: ${{ secrets.THE_RACING_API_PASS }}
+      RESEND_API_KEY:      ${{ secrets.RESEND_API_KEY }}
+      EMAIL_FROM:          ${{ secrets.EMAIL_FROM }}
+      EMAIL_TO:            ${{ secrets.EMAIL_TO }}
+      SHEET_URL:           ${{ secrets.SHEET_URL }}
+      NOTIFY_ON_EMPTY:     ${{ vars.NOTIFY_ON_EMPTY || 'false' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Guard cron vs. local time
+        if: github.event_name == 'schedule'
+        run: |
+          python - <<'PY'
+          import sys
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          now = datetime.now(ZoneInfo("Europe/London"))
+          if not (now.hour == 7 and now.minute < 30):
+              print(f"Skipping — not 07:00 UK local (now={now.isoformat()})")
+              sys.exit(78)  # neutral "skipped" exit code, treated as success
+          PY
+
+      - name: Refresh catalogue from sheet
+        if: env.SHEET_URL != ''
+        run: python -m dailybreezeup.seed --sheet "$SHEET_URL" -v
+
+      - name: Run daily job
+        run: |
+          args=""
+          if [ -n "${{ github.event.inputs.date }}" ]; then args="$args --date ${{ github.event.inputs.date }}"; fi
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then args="$args --dry-run"; fi
+          python -m dailybreezeup.daily $args
+
+      - name: Commit db changes (email_log, run_log)
+        if: github.event_name == 'schedule' && success()
+        run: |
+          git config user.name  "breezeup-bot"
+          git config user.email "breezeup-bot@users.noreply.github.com"
+          if ! git diff --quiet -- data/breezeup.sqlite; then
+            git add data/breezeup.sqlite
+            git commit -m "chore: daily run log $(date -u +'%Y-%m-%d')"
+            git push
+          fi
+
+      - name: Upload preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-${{ github.run_id }}
+          path: |
+            data/last_preview.html
+            data/last_preview.txt
+          if-no-files-found: ignore

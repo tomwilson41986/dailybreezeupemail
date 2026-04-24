@@ -1,0 +1,44 @@
+Breeze-up graduates running — {{ run_date.strftime("%A %d %B %Y") }}
+{{ total }} horse{{ '' if total == 1 else 's' }}
+
+{% macro block(row) -%}
+{{ row.horse }}{% if row.bred %} ({{ row.bred }}){% endif %}
+{% if row.sire or row.dam %}  {{ row.sire or '?' }} × {{ row.dam or '?' }}
+{% endif %}
+  Sale: {{ row.sale_name }}{% if row.lot %} · Lot {{ row.lot }}{% endif %}{% if row.price %} · {{ '£' if row.currency == 'GBP' else '€' }}{{ '{:,}'.format(row.price) }}{% endif %}{% if row.withdrawn %} · (withdrawn){% endif %}
+{% if row.breeze_rating or row.precocity_rating or row.ot_rank %}  Ratings: {% if row.breeze_rating %}BR {{ row.breeze_rating }}  {% endif %}{% if row.precocity_rating %}PR {{ row.precocity_rating }}  {% endif %}{% if row.ot_rank %}OT rank {{ row.ot_rank }}  {% endif %}{% if row.sl_1f %}1F {{ row.sl_1f }}{% endif %}
+{% endif %}
+{% if row.sheet_row_url %}  Lot page: {{ row.sheet_row_url }}
+{% endif %}
+{%- endmacro %}
+
+{% if ran_yesterday %}
+==== RAN YESTERDAY ({{ ran_yesterday|length }}) ====
+{% for row in ran_yesterday %}
+{{ block(row) }}  {{ row.course }}{% if row.off_time %} · {{ row.off_time.strftime("%H:%M") }}{% endif %} · {{ row.race_name }}
+  Finish: {{ row.finishing_position or '-' }}   SP: {{ row.sp or '-' }}   Trainer: {{ row.trainer or '' }}
+
+{% endfor %}
+{% endif %}
+
+{% if declared %}
+==== DECLARED TODAY / TOMORROW ({{ declared|length }}) ====
+{% for row in declared %}
+{{ block(row) }}  {{ row.race_date.strftime("%a %d %b") }}{% if row.off_time %} · {{ row.off_time.strftime("%H:%M") }}{% endif %} · {{ row.course }} · {{ row.race_name }}
+  Trainer: {{ row.trainer or '' }}   Jockey: {{ row.jockey or '' }}   Draw: {{ row.draw or '' }}
+
+{% endfor %}
+{% endif %}
+
+{% if entered %}
+==== ENTERED (NEXT 7 DAYS) ({{ entered|length }}) ====
+{% for row in entered %}
+{{ block(row) }}  {{ row.race_date.strftime("%a %d %b") }} · {{ row.course }} · {{ row.race_name }}
+  Trainer: {{ row.trainer or '' }}
+
+{% endfor %}
+{% endif %}
+
+{% if total == 0 %}
+No breeze-up graduates matched today's cards.
+{% endif %}
