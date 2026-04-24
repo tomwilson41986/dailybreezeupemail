@@ -7,9 +7,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    the_racing_api_user: str = ""
-    the_racing_api_pass: str = ""
-
     gmail_user: str = ""
     gmail_app_password: str = ""
     smtp_host: str = "smtp.gmail.com"

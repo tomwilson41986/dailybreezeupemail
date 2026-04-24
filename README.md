@@ -13,8 +13,8 @@ Coverage (v1, 2026):
 1. **You** maintain a Google Sheet (shared as "anyone with the link can view") with one row per lot. Columns: `Year, Sale, Lot, Sex, Sire, Dam, Vendor, Buyer, Price, OT Diff/M, OT Rank, SL 1F, SL GO, Breeze Rating, Precocity Rating` (and an optional `Horse` column — safe to leave empty for unnamed breeze-up juveniles).
 2. **Seed**: `breezeup-seed --sheet <URL>` pulls the sheet via the CSV export endpoint and upserts each row into a local SQLite catalogue (`data/breezeup.sqlite`).
 3. **Daily** (GitHub Actions, 07:00 UK):
-   - pulls today's + tomorrow's declarations and today+2..today+7 entries from [The Racing API](https://theracingapi.com) (GB/IRE) and scrapes `france-galop.com` (FR);
-   - pulls yesterday's results from the same sources;
+   - scrapes today's + tomorrow's racecards and today+2..today+7 entries from `racingpost.com` (GB/IRE) and `france-galop.com` (FR);
+   - scrapes yesterday's results from the same sources;
    - **matches** each runner against the catalogue. Primary key is `(sire, dam, foal year)` because breeze-up horses are generally unnamed at sale. Horse name is used when present;
    - renders an HTML+plaintext email with your custom columns (Breeze Rating, Precocity Rating, OT Rank, SL 1F) embedded, and a deeplink to the specific sheet row;
    - sends via **Gmail SMTP** (using an app password) and logs the send to avoid duplicates on re-runs.
@@ -57,8 +57,6 @@ pytest
 
 | Name | Purpose |
 | --- | --- |
-| `THE_RACING_API_USER` | HTTP Basic user for theracingapi.com |
-| `THE_RACING_API_PASS` | HTTP Basic password |
 | `GMAIL_USER` | Full Gmail address used to authenticate SMTP |
 | `GMAIL_APP_PASSWORD` | 16-char [app password](https://myaccount.google.com/apppasswords) (requires 2FA on the account) |
 | `EMAIL_FROM` | Optional. Defaults to `GMAIL_USER`. Must be an alias of the Gmail account or Gmail will rewrite it. |
@@ -93,13 +91,13 @@ src/dailybreezeup/
   seed.py             # catalogue seeder CLI (--sheet | --all | --sale | --vendor)
   sheet.py            # Google Sheet CSV ingestor
   matching.py         # normalize_name, horse_key, match()
-  emailer.py          # Resend + Jinja render
+  emailer.py          # Gmail SMTP + Jinja render
   schema.sql          # SQLite DDL
   db.py               # connection + migrate()
   config.py           # env loader (pydantic-settings)
   models/             # pydantic: Sale, RawLot, RaceCard, Runner
   racing/
-    theracingapi.py   # GB/IRE racecards + results via Racing API
+    racingpost.py     # GB/IRE racecards + results scraped from racingpost.com
     francegalop.py    # FR racecards + results scraped
     common.py         # shared HTTP session with retries
   scrapers/           # fallback: per-vendor catalogue scrapers
@@ -117,7 +115,7 @@ tests/
 ## Open questions / known gaps
 
 - **France Galop selectors unverified** — `src/dailybreezeup/racing/francegalop.py::SELECTORS`. Iterate locally if FR cards don't populate.
-- **Racing API tier**: code tries `/v1/racecards/pro` then falls back to `/v1/racecards/standard`.
+- **Racing Post scraping is against their ToS**, and they sit behind Fastly/Akamai bot rules. The scraper uses browser-like headers and a 1.2s delay between race-page fetches (~2-3 min per run), but there's no guarantee RP won't add a harder block. Monitor logs; if the index request stops returning runners, update `_BROWSER_HEADERS` or course slug sets in `racing/racingpost.py`.
 - **Sale name mapping**: if you use a sale label not in `sheet.SALE_MAPPING`, the seed script logs and skips it. Add new entries there.
 - **Vendor scrapers** (`scrapers/`) ship with unverified CSS selectors and are optional — the sheet is the primary source. Keep them if you want a daily cross-check against vendor sites.
 - **Matching precision**: `(sire, dam, foal_year)` uniquely identifies a horse except in the rare case of identical sire+dam half-siblings foaled the same year (e.g. twins, or full siblings born in different months of the same calendar year). Add a `Horse` column later to disambiguate.
