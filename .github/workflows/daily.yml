@@ -25,7 +25,8 @@ jobs:
       TZ: Europe/London
       THE_RACING_API_USER: ${{ secrets.THE_RACING_API_USER }}
       THE_RACING_API_PASS: ${{ secrets.THE_RACING_API_PASS }}
-      RESEND_API_KEY:      ${{ secrets.RESEND_API_KEY }}
+      GMAIL_USER:          ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD:  ${{ secrets.GMAIL_APP_PASSWORD }}
       EMAIL_FROM:          ${{ secrets.EMAIL_FROM }}
       EMAIL_TO:            ${{ secrets.EMAIL_TO }}
       SHEET_URL:           ${{ secrets.SHEET_URL }}

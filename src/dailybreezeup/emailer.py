@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 import logging
+import smtplib
 from dataclasses import dataclass
 from datetime import date
+from email.message import EmailMessage
+from email.utils import formatdate, make_msgid
 from typing import Any
 
-import requests
 from jinja2 import Environment, PackageLoader, select_autoescape
 
 from dailybreezeup.config import Settings
 
 log = logging.getLogger(__name__)
-
-RESEND_URL = "https://api.resend.com/emails"
 
 
 @dataclass
@@ -54,27 +54,32 @@ def render(
     return EmailPayload(subject=subject, html=html, text=text)
 
 
-def send(payload: EmailPayload, settings: Settings) -> None:
-    if not settings.resend_api_key:
-        raise RuntimeError("RESEND_API_KEY is not set")
-    if not settings.email_from or not settings.email_to_list:
-        raise RuntimeError("EMAIL_FROM / EMAIL_TO must be set")
+def _build_message(payload: EmailPayload, sender: str, recipients: list[str]) -> EmailMessage:
+    msg = EmailMessage()
+    msg["Subject"] = payload.subject
+    msg["From"] = sender
+    msg["To"] = ", ".join(recipients)
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain=sender.split("@", 1)[-1] if "@" in sender else "localhost")
+    msg.set_content(payload.text)
+    msg.add_alternative(payload.html, subtype="html")
+    return msg
 
-    body = {
-        "from": settings.email_from,
-        "to": settings.email_to_list,
-        "subject": payload.subject,
-        "html": payload.html,
-        "text": payload.text,
-    }
-    r = requests.post(
-        RESEND_URL,
-        json=body,
-        headers={
-            "Authorization": f"Bearer {settings.resend_api_key}",
-            "Content-Type": "application/json",
-        },
-        timeout=30,
-    )
-    r.raise_for_status()
-    log.info("Resend accepted email: %s", r.json().get("id", "?"))
+
+def send(payload: EmailPayload, settings: Settings) -> None:
+    if not settings.gmail_user or not settings.gmail_app_password:
+        raise RuntimeError("GMAIL_USER and GMAIL_APP_PASSWORD must be set")
+    recipients = settings.email_to_list
+    if not recipients:
+        raise RuntimeError("EMAIL_TO must be set (comma-separated allowed)")
+
+    sender = settings.email_from or settings.gmail_user
+    msg = _build_message(payload, sender, recipients)
+
+    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
+        smtp.ehlo()
+        smtp.starttls()
+        smtp.ehlo()
+        smtp.login(settings.gmail_user, settings.gmail_app_password)
+        smtp.send_message(msg, from_addr=sender, to_addrs=recipients)
+    log.info("SMTP delivered email to %d recipient(s)", len(recipients))

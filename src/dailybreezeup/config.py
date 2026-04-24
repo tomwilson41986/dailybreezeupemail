@@ -10,7 +10,11 @@ class Settings(BaseSettings):
     the_racing_api_user: str = ""
     the_racing_api_pass: str = ""
 
-    resend_api_key: str = ""
+    gmail_user: str = ""
+    gmail_app_password: str = ""
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+
     email_from: str = ""
     email_to: str = ""
 

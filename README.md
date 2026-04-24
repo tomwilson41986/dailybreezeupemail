@@ -17,7 +17,7 @@ Coverage (v1, 2026):
    - pulls yesterday's results from the same sources;
    - **matches** each runner against the catalogue. Primary key is `(sire, dam, foal year)` because breeze-up horses are generally unnamed at sale. Horse name is used when present;
    - renders an HTML+plaintext email with your custom columns (Breeze Rating, Precocity Rating, OT Rank, SL 1F) embedded, and a deeplink to the specific sheet row;
-   - sends via [Resend](https://resend.com) and logs the send to avoid duplicates on re-runs.
+   - sends via **Gmail SMTP** (using an app password) and logs the send to avoid duplicates on re-runs.
 
 ## Local setup
 
@@ -59,12 +59,13 @@ pytest
 | --- | --- |
 | `THE_RACING_API_USER` | HTTP Basic user for theracingapi.com |
 | `THE_RACING_API_PASS` | HTTP Basic password |
-| `RESEND_API_KEY` | Resend API key |
-| `EMAIL_FROM` | Verified sender, e.g. `breezeup@yourdomain.com` |
+| `GMAIL_USER` | Full Gmail address used to authenticate SMTP |
+| `GMAIL_APP_PASSWORD` | 16-char [app password](https://myaccount.google.com/apppasswords) (requires 2FA on the account) |
+| `EMAIL_FROM` | Optional. Defaults to `GMAIL_USER`. Must be an alias of the Gmail account or Gmail will rewrite it. |
 | `EMAIL_TO` | Recipient(s), comma-separated |
 | `SHEET_URL` | Google Sheet share link (must be "anyone with link can view") |
 
-Before the first send, verify the `EMAIL_FROM` domain in Resend (SPF + DKIM). Optional repo **variable** `NOTIFY_ON_EMPTY=true` sends a "no hits" email even on quiet days.
+Gmail's SMTP limits: ~500 recipients/day on a consumer account, ~2,000/day on Workspace. For this job, one send/day to a small recipient list, you're nowhere near the limit. Optional repo **variable** `NOTIFY_ON_EMPTY=true` sends a "no hits" email even on quiet days.
 
 ## Sheet schema
 
