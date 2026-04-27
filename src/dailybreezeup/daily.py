@@ -177,6 +177,7 @@ def run(
     run_date: date | None = None,
     dry_run: bool = False,
     no_send: bool = False,
+    demo: bool = False,
 ) -> int:
     settings: Settings = load_settings()
     today = run_date or datetime.now(UK).date()
@@ -188,26 +189,32 @@ def run(
         )
         run_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
-        log.info("Discovering breeze-up sales for %d", today.year)
-        sales = rp_sales.discover_sales(today.year)
-        log.info("Sales found: %d", len(sales))
-        for s in sales:
-            log.info("  %s  (%s %s)", s.sale_name, s.sale_date.isoformat(), s.venue_uid)
-
-        all_lots: list[rp_sales.SaleLot] = []
-        for sale in sales:
-            lots = rp_sales.fetch_lots(sale)
-            log.info("  %s: %d lots (entered=%d)",
-                     sale.sale_name, len(lots), sum(1 for lot in lots if lot.entered))
-            all_lots.extend(lots)
-
-        uids = {lot.horse_uid for lot in all_lots if lot.horse_uid is not None}
-        log.info("Horse uids across all catalogues: %d", len(uids))
-
+        all_lots: list[rp_sales.SaleLot]
         hits: list[rp_results.ResultHit] = []
-        if uids:
-            hits = rp_results.fetch_hits_for_uids(today, uids)
-            log.info("Result hits for today: %d", len(hits))
+        if demo:
+            log.warning("DEMO MODE: using static fixture lots, no live RP fetch")
+            all_lots = rp_sales.demo_lots()
+            log.info("Demo lots: %d (entered=%d)",
+                     len(all_lots), sum(1 for lot in all_lots if lot.entered))
+        else:
+            log.info("Discovering breeze-up sales for %d", today.year)
+            sales = rp_sales.discover_sales(today.year)
+            log.info("Sales found: %d", len(sales))
+            for s in sales:
+                log.info("  %s  (%s %s)", s.sale_name, s.sale_date.isoformat(), s.venue_uid)
+
+            all_lots = []
+            for sale in sales:
+                lots = rp_sales.fetch_lots(sale)
+                log.info("  %s: %d lots (entered=%d)",
+                         sale.sale_name, len(lots), sum(1 for lot in lots if lot.entered))
+                all_lots.extend(lots)
+
+            uids = {lot.horse_uid for lot in all_lots if lot.horse_uid is not None}
+            log.info("Horse uids across all catalogues: %d", len(uids))
+            if uids:
+                hits = rp_results.fetch_hits_for_uids(today, uids)
+                log.info("Result hits for today: %d", len(hits))
 
         entered, ran = _classify(
             today, all_lots, hits,
@@ -228,9 +235,8 @@ def run(
 
         total = len(entered) + len(ran)
         summary = {
-            "sales": len(sales),
+            "demo": demo,
             "lots": len(all_lots),
-            "uids": len(uids),
             "entered_in_window": len(entered),
             "ran_today": len(ran),
         }
@@ -264,6 +270,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="YYYY-MM-DD (default: today UK)")
     ap.add_argument("--dry-run", action="store_true", help="Render preview but don't send")
     ap.add_argument("--no-send", action="store_true", help="Alias for --dry-run")
+    ap.add_argument("--demo", action="store_true",
+                    help="Skip live RP fetch; render with the four real Craven 2026 entered lots")
     ap.add_argument("-v", "--verbose", action="count", default=0)
     args = ap.parse_args(argv)
 
@@ -271,7 +279,9 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-    return run(run_date=args.date, dry_run=args.dry_run, no_send=args.no_send)
+    return run(
+        run_date=args.date, dry_run=args.dry_run, no_send=args.no_send, demo=args.demo,
+    )
 
 
 if __name__ == "__main__":

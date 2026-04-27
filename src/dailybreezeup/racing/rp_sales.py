@@ -351,6 +351,94 @@ def discover_sales(
     return _fallback_sales(year)
 
 
+def demo_lots() -> list[SaleLot]:
+    """Return the four real Craven 2026 lots that were flagged ``entered`` in
+    Racing Post's catalogue at the time of capture.  Used by ``--demo`` to
+    exercise the rendering and email pipeline without making any live RP
+    requests (handy when the runner IP is bot-blocked)."""
+    sale = Sale(
+        venue_uid=5,
+        sale_date=date(2026, 4, 14),
+        sale_end_date=date(2026, 4, 15),
+        sale_name="Tattersalls Craven Breeze Up Sale 2026",
+        sale_co="Tattersalls",
+    )
+    common = dict(
+        sale=sale,
+        lot_letter="",
+        horse_name="",
+        age=2,
+        year_foaled=2024,
+        entered=True,
+    )
+    return [
+        SaleLot(
+            **common,
+            lot_no=16,
+            horse_uid=8688568,
+            sire_uid=3095735, sire_name="Havana Grey",
+            dam_uid=5746537, dam_name="Hot Secret",
+            sire_of_dam_name="Sakhee's Secret",
+            sex="F",
+            seller="From Yeomanstown Stud, Ireland",
+            price_label="GBG 350,000",
+            buyer="Stroud Coleman Bloodstock",
+            entry=EntryDetails(
+                course_uid=38, course_name="NEWMARKET",
+                race_date=date(2026, 10, 3), race_uid=910567,
+            ),
+        ),
+        SaleLot(
+            **common,
+            lot_no=65,
+            horse_uid=8688838,
+            sire_uid=None, sire_name="Cotai Glory",
+            dam_uid=None, dam_name="Oatmeal",
+            sire_of_dam_name="Dalakhani",
+            sex="C",
+            seller="From Davis Bloodstock, Ireland",
+            price_label=None,
+            buyer="Withdrawn",
+            entry=EntryDetails(
+                course_uid=107, course_name="YORK",
+                race_date=date(2026, 8, 20), race_uid=910568,
+            ),
+        ),
+        SaleLot(
+            **common,
+            lot_no=73,
+            horse_uid=8688656,
+            sire_uid=None, sire_name="Blackbeard",
+            dam_uid=None, dam_name="Pearl Chavez",
+            sire_of_dam_name="Postponed",
+            sex="F",
+            seller="",
+            price_label=None,
+            buyer="Not Sold",
+            entry=EntryDetails(
+                course_uid=38, course_name="NEWMARKET",
+                race_date=date(2026, 10, 3), race_uid=910567,
+            ),
+        ),
+        SaleLot(
+            **common,
+            lot_no=178,
+            horse_uid=None,
+            sire_uid=None, sire_name="Harry Angel",
+            dam_uid=None, dam_name="El Hadeeyah",
+            sire_of_dam_name="",
+            sex=None,
+            seller="",
+            price_label=None,
+            buyer="Vendor",
+            entry=EntryDetails(
+                course_uid=15, course_name="DONCASTER",
+                race_date=date(2026, 9, 10), race_uid=912529,
+            ),
+        ),
+    ]
+
+
 def fetch_lots(sale: Sale, *, session: requests.Session | None = None, sleep: float = 0.8) -> list[SaleLot]:
     """Paginate the data.json for a sale and return every lot."""
     s = session or _make_session()

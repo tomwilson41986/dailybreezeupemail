@@ -130,3 +130,17 @@ def test_fallback_sales_returns_known_2026_breezeups():
 
 def test_fallback_sales_unknown_year_returns_empty():
     assert rp_sales._fallback_sales(2099) == []
+
+
+def test_demo_lots_returns_four_entered_craven_lots():
+    lots = rp_sales.demo_lots()
+    assert len(lots) == 4
+    assert all(lot.entered for lot in lots)
+    assert all(lot.entry is not None for lot in lots)
+    by_lot = {lot.lot_no: lot for lot in lots}
+    assert set(by_lot) == {16, 65, 73, 178}
+    assert by_lot[16].sire_name == "Havana Grey"
+    assert by_lot[16].entry.course_name == "NEWMARKET"
+    assert by_lot[16].entry.race_date == date(2026, 10, 3)
+    # Three of the four have horse_uid; lot 178 is unregistered so uid=None
+    assert by_lot[178].horse_uid is None
