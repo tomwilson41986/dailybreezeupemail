@@ -20,7 +20,7 @@ Breeze-up graduates — {{ run_date.strftime("%A %d %B %Y") }}
 {% endif %}
 
 {% if entered %}
-==== ENTERED IN NEXT 5 DAYS ({{ entered|length }}) ====
+==== ENTERED IN NEXT {{ entries_window_days }} DAY{{ '' if entries_window_days == 1 else 'S' }} ({{ entered|length }}) ====
 {% for row in entered %}
 {{ block(row) }}
   {{ row.race_date.strftime("%a %d %b") }} - {{ row.course }}
@@ -30,5 +30,5 @@ Breeze-up graduates — {{ run_date.strftime("%A %d %B %Y") }}
 {% endif %}
 
 {% if total == 0 %}
-No breeze-up graduates ran today and none are entered in the next 5 days.
+No breeze-up graduates ran today and none are entered in the next {{ entries_window_days }} day{{ '' if entries_window_days == 1 else 's' }}.
 {% endif %}

@@ -36,6 +36,7 @@ def render(
     run_date: date,
     entered: list[dict[str, Any]],
     ran_today: list[dict[str, Any]],
+    entries_window_days: int = 5,
 ) -> EmailPayload:
     env = _env()
     total = len(entered) + len(ran_today)
@@ -48,6 +49,7 @@ def render(
         "total": total,
         "entered": entered,
         "ran_today": ran_today,
+        "entries_window_days": entries_window_days,
         "subject": subject,
     }
     html = env.get_template("email.html.j2").render(**context)

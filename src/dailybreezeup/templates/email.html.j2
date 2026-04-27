@@ -57,7 +57,7 @@
     {% endif %}
 
     {% if entered %}
-    <h2 style="font-size:16px;border-bottom:1px solid #e3e3de;padding-bottom:6px;">Entered in the next 5 days ({{ entered|length }})</h2>
+    <h2 style="font-size:16px;border-bottom:1px solid #e3e3de;padding-bottom:6px;">Entered in the next {{ entries_window_days }} day{{ '' if entries_window_days == 1 else 's' }} ({{ entered|length }})</h2>
     <table width="100%" cellspacing="0" cellpadding="8" style="border-collapse:collapse;font-size:13px;margin-bottom:24px;">
       <thead>
         <tr style="background:#faf7f0;">
@@ -83,7 +83,7 @@
     {% endif %}
 
     {% if total == 0 %}
-    <p style="color:#666;">No breeze-up graduates ran today and none are entered in the next 5 days.</p>
+    <p style="color:#666;">No breeze-up graduates ran today and none are entered in the next {{ entries_window_days }} day{{ '' if entries_window_days == 1 else 's' }}.</p>
     {% endif %}
 
     <p style="margin-top:32px;color:#999;font-size:11px;">

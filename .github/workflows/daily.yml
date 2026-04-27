@@ -28,6 +28,7 @@ jobs:
       EMAIL_FROM:         ${{ secrets.EMAIL_FROM }}
       EMAIL_TO:           ${{ secrets.EMAIL_TO }}
       NOTIFY_ON_EMPTY:    ${{ vars.NOTIFY_ON_EMPTY || 'false' }}
+      ENTRIES_WINDOW_DAYS: ${{ vars.ENTRIES_WINDOW_DAYS || '5' }}
 
     steps:
       - uses: actions/checkout@v4

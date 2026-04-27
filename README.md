@@ -50,7 +50,14 @@ pytest
 | `EMAIL_FROM` | Optional. Defaults to `GMAIL_USER`. Must be an alias of the Gmail account or Gmail will rewrite it. |
 | `EMAIL_TO` | Recipient(s), comma-separated |
 
-Gmail's SMTP limits: ~500 recipients/day on a consumer account, ~2,000/day on Workspace. One send/day to a small recipient list is nowhere near that. Optional repo **variable** `NOTIFY_ON_EMPTY=true` sends a "nothing today" email even on quiet days.
+Gmail's SMTP limits: ~500 recipients/day on a consumer account, ~2,000/day on Workspace. One send/day to a small recipient list is nowhere near that.
+
+Optional repo **variables**:
+
+| Name | Default | Effect |
+| --- | --- | --- |
+| `NOTIFY_ON_EMPTY` | `false` | Set `true` to send a "nothing today" email even when there are zero hits. Useful as a heartbeat early in the season. |
+| `ENTRIES_WINDOW_DAYS` | `5` | Forward window (in days, inclusive) for the "Entered" section. Set to a large number (e.g. `9999`) to surface every future entry currently flagged in the RP catalogue. |
 
 ## Project layout
 

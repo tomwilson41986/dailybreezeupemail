@@ -55,10 +55,22 @@ def test_render_shows_entered_and_ran_sections():
     assert "2 horses" in p.subject
 
 
+def test_render_window_label_reflects_setting():
+    p = render(
+        run_date=date(2026, 4, 24),
+        entered=[_entered_row()],
+        ran_today=[],
+        entries_window_days=9999,
+    )
+    assert "Entered in the next 9999 days (1)" in p.html
+    assert "ENTERED IN NEXT 9999 DAYS (1)" in p.text
+
+
 def test_render_empty_case():
     p = render(run_date=date(2026, 4, 24), entered=[], ran_today=[])
     assert "0 horses" in p.subject
     assert "No breeze-up graduates ran today" in p.html
+    assert "next 5 days" in p.html  # default window when not specified
 
 
 def test_render_links_race_urls_in_html():

@@ -29,8 +29,6 @@ UK = ZoneInfo("Europe/London")
 PREVIEW_HTML = Path("data/last_preview.html")
 PREVIEW_TXT = Path("data/last_preview.txt")
 
-ENTRIES_WINDOW_DAYS = 5  # today .. today + ENTRIES_WINDOW_DAYS inclusive
-
 
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -98,8 +96,10 @@ def _classify(
     today: date,
     lots: list[rp_sales.SaleLot],
     results: list[rp_results.ResultHit],
+    *,
+    entries_window_days: int,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    window_end = today + timedelta(days=ENTRIES_WINDOW_DAYS)
+    window_end = today + timedelta(days=entries_window_days)
     entered: list[dict[str, Any]] = []
     for lot in lots:
         if not (lot.entered and lot.entry):
@@ -209,12 +209,21 @@ def run(
             hits = rp_results.fetch_hits_for_uids(today, uids)
             log.info("Result hits for today: %d", len(hits))
 
-        entered, ran = _classify(today, all_lots, hits)
+        entered, ran = _classify(
+            today, all_lots, hits,
+            entries_window_days=settings.entries_window_days,
+        )
+        log.info("entries window: today..+%d days", settings.entries_window_days)
 
         entered = _filter_already_sent(conn, today, "entered", entered)
         ran = _filter_already_sent(conn, today, "ran_today", ran)
 
-        payload = render(run_date=today, entered=entered, ran_today=ran)
+        payload = render(
+            run_date=today,
+            entered=entered,
+            ran_today=ran,
+            entries_window_days=settings.entries_window_days,
+        )
         _write_preview(payload)
 
         total = len(entered) + len(ran)
