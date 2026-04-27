@@ -38,7 +38,10 @@
         <div style="color:#555;font-size:11px;">
           {% if row.sheet_ot_rank is not none %}OT #{{ row.sheet_ot_rank }}{% endif %}
           {% if row.sheet_ot_diff_m is not none %} ({{ "%+.2f"|format(row.sheet_ot_diff_m) }}){% endif %}
-          {% if row.sheet_sl_1f is not none %} &middot; SL {{ "%.2f"|format(row.sheet_sl_1f) }}{% endif %}
+        </div>
+        <div style="color:#555;font-size:11px;">
+          {% if row.sheet_sl_1f is not none %}SL 1F {{ "%.2f"|format(row.sheet_sl_1f) }}{% endif %}
+          {% if row.sheet_sl_go is not none %} &middot; SL GO {{ "%.2f"|format(row.sheet_sl_go) }}{% endif %}
         </div>
       {% else %}
         <span style="color:#999;font-size:11px;">—</span>

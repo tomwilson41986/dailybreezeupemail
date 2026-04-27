@@ -12,6 +12,7 @@ Breeze-up graduates — {{ run_date.strftime("%A %d %B %Y") }}
   Sale: {{ row.sale_name }} / Lot {{ row.lot }}{% if price %} / {{ price }}{% endif %}{% if buyer %} / {{ buyer }}{% endif %}
 {% if row.sheet_matched %}
   Ratings: BR {{ "%.1f"|format(row.sheet_breeze_rating) if row.sheet_breeze_rating is not none else '-' }} / PR {{ "%.1f"|format(row.sheet_precocity_rating) if row.sheet_precocity_rating is not none else '-' }} / OT #{{ row.sheet_ot_rank if row.sheet_ot_rank is not none else '-' }}
+  SL 1F: {{ "%.2f"|format(row.sheet_sl_1f) if row.sheet_sl_1f is not none else '-' }} / SL GO: {{ "%.2f"|format(row.sheet_sl_go) if row.sheet_sl_go is not none else '-' }}
 {% endif %}
 {%- endmacro %}
 
