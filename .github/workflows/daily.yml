@@ -20,12 +20,11 @@ on:
         required: false
         default: "false"
       entries_window_days:
-        description: "Override forward window (days). Leave blank to use the repo default (5)."
+        description: "Override forward window (days). Blank = use repo default (5)."
         required: false
       notify_on_empty:
-        description: "Send 'no horses today' email if total=0"
+        description: "Send 'no horses today' email if total=0. Blank = use repo default. Type 'true' or 'false'."
         required: false
-        default: "false"
 
 jobs:
   send:

@@ -39,4 +39,11 @@ Breeze-up graduates — {{ run_date.strftime("%A %d %B %Y") }}
 
 {% if total == 0 %}
 No breeze-up graduates ran today and none are entered in the next {{ entries_window_days }} day{{ '' if entries_window_days == 1 else 's' }}.
+{% if diagnostics %}
+
+---- Run diagnostics ----
+{% for k, v in diagnostics.items() %}
+{{ k }}: {{ v }}
+{% endfor %}
+{% endif %}
 {% endif %}

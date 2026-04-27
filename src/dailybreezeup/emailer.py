@@ -37,6 +37,7 @@ def render(
     entered: list[dict[str, Any]],
     ran_today: list[dict[str, Any]],
     entries_window_days: int = 5,
+    diagnostics: dict[str, Any] | None = None,
 ) -> EmailPayload:
     env = _env()
     total = len(entered) + len(ran_today)
@@ -51,6 +52,7 @@ def render(
         "ran_today": ran_today,
         "entries_window_days": entries_window_days,
         "subject": subject,
+        "diagnostics": diagnostics or {},
     }
     html = env.get_template("email.html.j2").render(**context)
     text = env.get_template("email.txt.j2").render(**context)

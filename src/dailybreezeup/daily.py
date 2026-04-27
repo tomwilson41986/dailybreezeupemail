@@ -219,6 +219,7 @@ def run(
 
         all_lots: list[rp_sales.SaleLot]
         hits: list[rp_results.ResultHit] = []
+        diagnostics: dict[str, Any] = {"mode": "demo" if demo else "live"}
         if demo:
             log.warning("DEMO MODE: using static fixture lots, no live RP fetch")
             all_lots = rp_sales.demo_lots()
@@ -230,6 +231,7 @@ def run(
             log.info("Sales found: %d", len(sales))
             for s in sales:
                 log.info("  %s  (%s %s)", s.sale_name, s.sale_date.isoformat(), s.venue_uid)
+            diagnostics["sales_found"] = len(sales)
 
             all_lots = []
             for sale in sales:
@@ -237,12 +239,15 @@ def run(
                 log.info("  %s: %d lots (entered=%d)",
                          sale.sale_name, len(lots), sum(1 for lot in lots if lot.entered))
                 all_lots.extend(lots)
+            diagnostics["lots_total"] = len(all_lots)
+            diagnostics["lots_entered_any_date"] = sum(1 for lot in all_lots if lot.entered)
 
             uids = {lot.horse_uid for lot in all_lots if lot.horse_uid is not None}
             log.info("Horse uids across all catalogues: %d", len(uids))
             if uids:
                 hits = rp_results.fetch_hits_for_uids(today, uids)
                 log.info("Result hits for today: %d", len(hits))
+            diagnostics["result_hits"] = len(hits)
 
         entries_window_days = settings.entries_window_days
         if demo:
@@ -271,14 +276,31 @@ def run(
             rm, mr = _enrich_with_sheet(ran, sheet_index)
             log.info("Sheet enrichment (ran_today): matched=%d, missing=%d", rm, mr)
 
-        entered = _filter_already_sent(conn, today, "entered", entered)
-        ran = _filter_already_sent(conn, today, "ran_today", ran)
+        diagnostics["entered_in_window_pre_dedup"] = len(entered)
+        diagnostics["ran_today_pre_dedup"] = len(ran)
+        if demo:
+            log.info("DEMO: skipping email_log dedup so the body always renders")
+        else:
+            pre_entered, pre_ran = len(entered), len(ran)
+            entered = _filter_already_sent(conn, today, "entered", entered)
+            ran = _filter_already_sent(conn, today, "ran_today", ran)
+            if pre_entered != len(entered) or pre_ran != len(ran):
+                dropped_entered = pre_entered - len(entered)
+                dropped_ran = pre_ran - len(ran)
+                log.info(
+                    "dedup filtered %d entered and %d ran_today rows already sent today",
+                    dropped_entered, dropped_ran,
+                )
+                diagnostics["dedup_dropped_entered"] = dropped_entered
+                diagnostics["dedup_dropped_ran_today"] = dropped_ran
+        diagnostics["entries_window_days"] = entries_window_days
 
         payload = render(
             run_date=today,
             entered=entered,
             ran_today=ran,
             entries_window_days=entries_window_days,
+            diagnostics=diagnostics,
         )
         _write_preview(payload)
 
