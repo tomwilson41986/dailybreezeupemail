@@ -13,51 +13,139 @@ A once-a-day email listing breeze-up sale graduates that either **ran today** or
 
 The catalogue JSON is authoritative: Racing Post does the lot → horse → race join for us. We don't match by name (breeze-up lots are usually unnamed at sale time anyway).
 
-## Local setup
+## Where it runs
 
-```bash
-python3.12 -m venv .venv && source .venv/bin/activate
-pip install -e .[dev]
-cp .env.example .env        # fill in Gmail app password + recipient
+GitHub Actions runners get challenged by Racing Post's bot filter (Fastly), so the cron lives on a personal machine instead. The repo ships a Windows PowerShell wrapper + Task Scheduler instructions; on macOS or Linux the moving parts are the same (just substitute launchd or cron).
+
+The GitHub Actions workflow is kept for **manual dispatches only** (Actions → daily-breezeup-email → Run workflow). The `--demo` flag bypasses the live RP fetch and renders the email with the four real entered Craven 2026 lots — handy for verifying the email layout regardless of where the runner sits.
+
+## Local setup (Windows, the production path)
+
+### 1. Prerequisites
+
+```powershell
+# In an admin PowerShell, if not already installed:
+winget install Python.Python.3.12
+winget install Git.Git
 ```
 
-Dry-run the job (no email sent; preview in `data/last_preview.html`):
+Open a fresh PowerShell so the new tools are on `$env:PATH`.
 
-```bash
-breezeup-daily --dry-run
-# or for a specific date:
-breezeup-daily --dry-run --date 2026-04-24
+### 2. Clone and install
+
+```powershell
+cd $env:USERPROFILE
+git clone https://github.com/tomwilson41986/dailybreezeupemail.git
+cd dailybreezeupemail
+py -3.12 -m venv .venv
+.\.venv\Scripts\pip install -e .
 ```
 
-Send for real:
+### 3. Configure secrets
 
-```bash
-breezeup-daily
+Copy `.env.example` to `.env` and fill in:
+
+```
+GMAIL_USER=your.address@gmail.com
+GMAIL_APP_PASSWORD=your16charapppassword
+EMAIL_TO=racingsquared@gmail.com
+NOTIFY_ON_EMPTY=true
+ENTRIES_WINDOW_DAYS=5
 ```
 
-Run tests:
+`.env` is gitignored — the values stay on your machine.
 
-```bash
-pytest
+### 4. Manual smoke test
+
+```powershell
+.\.venv\Scripts\breezeup-daily --dry-run
 ```
 
-## Secrets (GitHub repo → Settings → Secrets → Actions)
+Expected log output (verbatim shape):
 
-| Name | Purpose |
-| --- | --- |
-| `GMAIL_USER` | Full Gmail address used to authenticate SMTP |
-| `GMAIL_APP_PASSWORD` | 16-char [app password](https://myaccount.google.com/apppasswords) (requires 2FA on the account) |
-| `EMAIL_FROM` | Optional. Defaults to `GMAIL_USER`. Must be an alias of the Gmail account or Gmail will rewrite it. |
-| `EMAIL_TO` | Recipient(s), comma-separated |
+```
+INFO  Discovering breeze-up sales for 2026
+INFO  Sales found: 4
+INFO    Tattersalls Craven Breeze Up Sale 2026: 182 lots (entered=4)
+INFO    Goffs UK 2yo Breeze Up Sale 2026: NN lots (entered=K)
+...
+INFO  summary: {'demo': False, 'lots': 600+, 'entered_in_window': 4+, 'ran_today': 0}
+```
 
-Gmail's SMTP limits: ~500 recipients/day on a consumer account, ~2,000/day on Workspace. One send/day to a small recipient list is nowhere near that.
+If you see `Sales found: 0` and `RP catalogues index fetch failed`, your home IP is also being blocked and we'd need to switch to theracingapi.com.
 
-Optional repo **variables**:
+For the full real send (no `--dry-run`):
 
-| Name | Default | Effect |
+```powershell
+.\.venv\Scripts\breezeup-daily
+```
+
+The email should arrive at `EMAIL_TO` within a minute.
+
+### 5. Schedule it daily at 07:00 UK
+
+Run this **once** in an elevated PowerShell, replacing the path if you cloned elsewhere:
+
+```powershell
+$RepoRoot = "$env:USERPROFILE\dailybreezeupemail"
+$Wrapper  = Join-Path $RepoRoot "scripts\run-daily.ps1"
+
+$Action    = New-ScheduledTaskAction `
+    -Execute "powershell.exe" `
+    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$Wrapper`""
+
+$Trigger   = New-ScheduledTaskTrigger -Daily -At 7:00am
+
+$Settings  = New-ScheduledTaskSettingsSet `
+    -StartWhenAvailable `
+    -ExecutionTimeLimit (New-TimeSpan -Minutes 15) `
+    -DontStopIfGoingOnBatteries `
+    -AllowStartIfOnBatteries
+
+$Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
+
+Register-ScheduledTask `
+    -TaskName "BreezeupDaily" `
+    -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal `
+    -Description "Daily breeze-up email - 07:00 UK"
+```
+
+`-StartWhenAvailable` means if the laptop is asleep at 07:00 the task runs as soon as it wakes; you don't lose a day.
+
+To verify it's installed: open `taskschd.msc`, scroll to "Task Scheduler Library", look for `BreezeupDaily`.
+
+To trigger it manually for testing without waiting for 07:00:
+
+```powershell
+Start-ScheduledTask -TaskName "BreezeupDaily"
+```
+
+To remove it:
+
+```powershell
+Unregister-ScheduledTask -TaskName "BreezeupDaily" -Confirm:$false
+```
+
+### 6. Where to look when something goes wrong
+
+- **`logs\breezeup-YYYY-MM-DD.log`** in the repo — captures every run's full stdout/stderr.
+- **Task Scheduler GUI** → BreezeupDaily → History tab — shows last-run result and any system-level errors.
+- **Run tests** to make sure your environment is sane after a code update:
+  ```powershell
+  .\.venv\Scripts\pip install -e ".[dev]"
+  .\.venv\Scripts\pytest
+  ```
+
+## Secrets reference
+
+| Name | Where it lives | Purpose |
 | --- | --- | --- |
-| `NOTIFY_ON_EMPTY` | `false` | Set `true` to send a "nothing today" email even when there are zero hits. Useful as a heartbeat early in the season. |
-| `ENTRIES_WINDOW_DAYS` | `5` | Forward window (in days, inclusive) for the "Entered" section. Set to a large number (e.g. `9999`) to surface every future entry currently flagged in the RP catalogue. |
+| `GMAIL_USER` | `.env` (laptop) and/or GitHub repo secrets (manual dispatches) | Full Gmail address used to authenticate SMTP |
+| `GMAIL_APP_PASSWORD` | same | 16-char [app password](https://myaccount.google.com/apppasswords) (requires 2FA on the account) |
+| `EMAIL_FROM` | optional, same | Defaults to `GMAIL_USER`. Must be an alias of the Gmail account or Gmail will rewrite it. |
+| `EMAIL_TO` | same | Recipient(s), comma-separated |
+| `NOTIFY_ON_EMPTY` | same (or repo **variable** for GitHub) | `true` to send a "nothing today" email on quiet days. Recommended early season. |
+| `ENTRIES_WINDOW_DAYS` | same | Default 5. Forward window for the "Entered" section. |
 
 ## Project layout
 

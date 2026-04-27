@@ -1,10 +1,11 @@
 name: daily-breezeup-email
 
+# Daily cron is disabled because the GitHub Actions runner IP gets challenged
+# by Racing Post's bot filter (Fastly), so server-side fetches consistently
+# fail. Production runs are scheduled on a laptop instead. This workflow is
+# kept for ad-hoc manual triggers - particularly --demo which bypasses the
+# live fetch entirely and is useful for verifying email rendering.
 on:
-  schedule:
-    # 07:00 UK local. We run both candidates and let the job no-op the wrong one.
-    - cron: "0 6 * * *"   # 07:00 BST (summer)
-    - cron: "0 7 * * *"   # 07:00 GMT (winter)
   workflow_dispatch:
     inputs:
       date:
@@ -19,9 +20,6 @@ on:
         required: false
         default: "false"
 
-permissions:
-  contents: write  # so the job can commit an updated email_log to the db
-
 jobs:
   send:
     runs-on: ubuntu-latest
@@ -32,7 +30,7 @@ jobs:
       EMAIL_FROM:         ${{ secrets.EMAIL_FROM }}
       EMAIL_TO:           ${{ secrets.EMAIL_TO }}
       NOTIFY_ON_EMPTY:    ${{ vars.NOTIFY_ON_EMPTY || 'false' }}
-      ENTRIES_WINDOW_DAYS: ${{ vars.ENTRIES_WINDOW_DAYS || '36500' }}
+      ENTRIES_WINDOW_DAYS: ${{ vars.ENTRIES_WINDOW_DAYS || '5' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -45,19 +43,6 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      - name: Guard cron vs. local time
-        if: github.event_name == 'schedule'
-        run: |
-          python - <<'PY'
-          import sys
-          from datetime import datetime
-          from zoneinfo import ZoneInfo
-          now = datetime.now(ZoneInfo("Europe/London"))
-          if not (now.hour == 7 and now.minute < 30):
-              print(f"Skipping — not 07:00 UK local (now={now.isoformat()})")
-              sys.exit(78)  # neutral "skipped" exit code, treated as success
-          PY
-
       - name: Run daily job
         run: |
           args=""
@@ -65,17 +50,6 @@ jobs:
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then args="$args --dry-run"; fi
           if [ "${{ github.event.inputs.demo }}" = "true" ]; then args="$args --demo"; fi
           python -m dailybreezeup.daily $args
-
-      - name: Commit db changes (email_log, run_log)
-        if: github.event_name == 'schedule' && success()
-        run: |
-          git config user.name  "breezeup-bot"
-          git config user.email "breezeup-bot@users.noreply.github.com"
-          if ! git diff --quiet -- data/breezeup.sqlite; then
-            git add data/breezeup.sqlite
-            git commit -m "chore: daily run log $(date -u +'%Y-%m-%d')"
-            git push
-          fi
 
       - name: Upload preview
         if: always()

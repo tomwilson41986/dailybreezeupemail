@@ -16,10 +16,7 @@ class Settings(BaseSettings):
     email_to: str = ""
 
     notify_on_empty: bool = False
-    # Forward window for the "Entered" section. Temporarily wide-open
-    # while we test that future entries render correctly; revert to 5
-    # before going live.
-    entries_window_days: int = 36500
+    entries_window_days: int = 5
     db_path: Path = Field(default=Path("data/breezeup.sqlite"))
 
     @property
