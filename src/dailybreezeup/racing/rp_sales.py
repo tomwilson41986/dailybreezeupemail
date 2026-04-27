@@ -51,26 +51,59 @@ _SALE_RECORD_RE = re.compile(
 # Names that should count as "breeze-up" for our purposes.
 _BREEZE_NAME = re.compile(r"breeze.?up", re.IGNORECASE)
 
+_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+)
+
+# Header set patterned on a real Chrome 125 navigation, ordered to match what
+# the browser sends. RP/Fastly fingerprints by header shape; missing client
+# hints or sec-ch-ua values triggers the bot challenge.
 _DOC_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+    "User-Agent": _USER_AGENT,
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,image/apng,*/*;q=0.8,"
+        "application/signed-exchange;v=b3;q=0.7"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-GB,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate",
+    "sec-ch-ua": '"Chromium";v="125", "Not:A-Brand";v="24", "Google Chrome";v="125"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
     "Sec-Fetch-Dest": "document",
     "Sec-Fetch-Mode": "navigate",
     "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
     "Upgrade-Insecure-Requests": "1",
+    "Priority": "u=0, i",
+    "Cache-Control": "max-age=0",
 }
 _XHR_HEADERS = {
-    "User-Agent": _DOC_HEADERS["User-Agent"],
+    "User-Agent": _USER_AGENT,
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "en-GB,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate",
+    "sec-ch-ua": _DOC_HEADERS["sec-ch-ua"],
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
     "Sec-Fetch-Dest": "empty",
     "Sec-Fetch-Mode": "cors",
     "Sec-Fetch-Site": "same-origin",
     "X-Requested-With": "XMLHttpRequest",
+}
+
+# Hardcoded fallback for current-year breeze-up sales. Used only when the
+# /bloodstock/sales/catalogues/ index page is blocked and we can't discover
+# the list dynamically. Keep these up to date with each year's sale calendar;
+# they only need to match the URL path the data.json endpoint expects.
+_BREEZE_UP_FALLBACK: dict[int, list[tuple[int, str, str, str, str]]] = {
+    2026: [
+        (5,  "2026-04-14", "2026-04-15", "Tattersalls Craven Breeze Up Sale 2026", "Tattersalls"),
+        (44, "2026-04-22", "2026-04-22", "Goffs UK 2yo Breeze Up Sale 2026",        "Goffs UK"),
+        (36, "2026-05-09", "2026-05-09", "Arqana May 2yo Breeze Up 2026",           "Arqana"),
+        (4,  "2026-05-22", "2026-05-22", "Tattersalls Ireland Breeze Up Sale 2026", "Tattersalls Ireland"),
+    ],
 }
 
 
@@ -246,6 +279,47 @@ def _get(session: requests.Session, url: str, headers: dict[str, str]) -> reques
     return r
 
 
+def _fallback_sales(year: int) -> list[Sale]:
+    """Return the hardcoded breeze-up sale list for ``year`` if known, else []."""
+    rows = _BREEZE_UP_FALLBACK.get(year)
+    if not rows:
+        return []
+    out: list[Sale] = []
+    for venue_uid, raw_start, raw_end, name, co in rows:
+        try:
+            out.append(
+                Sale(
+                    venue_uid=venue_uid,
+                    sale_date=date.fromisoformat(raw_start),
+                    sale_end_date=date.fromisoformat(raw_end),
+                    sale_name=name,
+                    sale_co=co,
+                )
+            )
+        except ValueError:
+            continue
+    return out
+
+
+def _warm_up(s: requests.Session) -> None:
+    """Walk a real Chrome navigation: home -> bloodstock. Each call swallows
+    failures so a 503 on warm-up doesn't kill the job; the discover call
+    will report any final failure itself."""
+    for url, ref in (
+        (f"{BASE}/", None),
+        (f"{BASE}/bloodstock/", f"{BASE}/"),
+    ):
+        try:
+            hdrs = dict(_DOC_HEADERS)
+            if ref:
+                hdrs["Referer"] = ref
+                hdrs["Sec-Fetch-Site"] = "same-origin"
+            s.get(url, headers=hdrs, timeout=20)
+        except Exception as exc:  # noqa: BLE001
+            log.debug("warm-up GET %s failed: %s", url, exc)
+        wall.sleep(1.4)
+
+
 def discover_sales(
     year: int,
     *,
@@ -253,25 +327,28 @@ def discover_sales(
 ) -> list[Sale]:
     """Fetch the catalogues landing page and return this year's breeze-up sales.
 
-    Returns [] on network failure (e.g. RP bot-filter throttling) so the
-    daily job can continue and surface an empty email rather than crash.
+    Falls back to a hardcoded list of known sales (see ``_BREEZE_UP_FALLBACK``)
+    when the index page is blocked. Returns [] only if both paths fail.
     """
     s = session or _make_session()
-    try:
-        s.get(f"{BASE}/bloodstock/", headers=_DOC_HEADERS, timeout=20)
-    except Exception as exc:  # noqa: BLE001
-        log.debug("bloodstock warm-up failed: %s", exc)
-    wall.sleep(0.8)
+    _warm_up(s)
     try:
         r = _get(
             s,
             f"{BASE}/bloodstock/sales/catalogues/",
-            headers=dict(_DOC_HEADERS, Referer=f"{BASE}/bloodstock/"),
+            headers=dict(
+                _DOC_HEADERS,
+                Referer=f"{BASE}/bloodstock/",
+                **{"Sec-Fetch-Site": "same-origin"},
+            ),
         )
+        sales = filter_breeze_ups(parse_catalogues_index_html(r.text), year)
+        if sales:
+            return sales
+        log.warning("RP catalogues index returned 0 breeze-up sales for %d; using fallback", year)
     except Exception as exc:  # noqa: BLE001
-        log.warning("RP catalogues index fetch failed: %s", exc)
-        return []
-    return filter_breeze_ups(parse_catalogues_index_html(r.text), year)
+        log.warning("RP catalogues index fetch failed (%s); using fallback", exc)
+    return _fallback_sales(year)
 
 
 def fetch_lots(sale: Sale, *, session: requests.Session | None = None, sleep: float = 0.8) -> list[SaleLot]:

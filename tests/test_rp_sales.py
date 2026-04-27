@@ -116,3 +116,17 @@ def test_sale_urls_match_racing_post_shape():
         "https://www.racingpost.com/bloodstock/sales/catalogues/5/2026-04-14"
     )
     assert sale.data_url.endswith("/data.json")
+
+
+def test_fallback_sales_returns_known_2026_breezeups():
+    """When the index page is blocked, the hardcoded fallback list keeps the
+    pipeline running for the four 2026 breeze-up sales we care about."""
+    sales = rp_sales._fallback_sales(2026)
+    by_uid = {s.venue_uid: s for s in sales}
+    assert set(by_uid) == {5, 44, 36, 4}
+    assert by_uid[5].sale_date == date(2026, 4, 14)
+    assert by_uid[5].sale_name.startswith("Tattersalls Craven")
+
+
+def test_fallback_sales_unknown_year_returns_empty():
+    assert rp_sales._fallback_sales(2099) == []
