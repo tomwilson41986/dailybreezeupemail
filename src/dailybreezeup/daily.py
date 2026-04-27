@@ -244,11 +244,18 @@ def run(
                 hits = rp_results.fetch_hits_for_uids(today, uids)
                 log.info("Result hits for today: %d", len(hits))
 
+        entries_window_days = settings.entries_window_days
+        if demo:
+            # Demo lots have static future race dates that may sit far outside
+            # the production window. Force the window wide so --demo always
+            # renders a populated body for layout verification.
+            entries_window_days = 9999
+
         entered, ran = _classify(
             today, all_lots, hits,
-            entries_window_days=settings.entries_window_days,
+            entries_window_days=entries_window_days,
         )
-        log.info("entries window: today..+%d days", settings.entries_window_days)
+        log.info("entries window: today..+%d days", entries_window_days)
 
         try:
             sheet_rows = sheet_mod.fetch_sheet(settings.sheet_csv_url)
@@ -271,7 +278,7 @@ def run(
             run_date=today,
             entered=entered,
             ran_today=ran,
-            entries_window_days=settings.entries_window_days,
+            entries_window_days=entries_window_days,
         )
         _write_preview(payload)
 
