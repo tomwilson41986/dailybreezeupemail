@@ -23,6 +23,7 @@ from dailybreezeup.config import Settings, load as load_settings
 from dailybreezeup.db import session
 from dailybreezeup.emailer import EmailPayload, render, send
 from dailybreezeup.racing import rp_results, rp_sales
+from dailybreezeup import sheet as sheet_mod
 
 log = logging.getLogger("dailybreezeup.daily")
 UK = ZoneInfo("Europe/London")
@@ -45,7 +46,10 @@ def _lot_row(lot: rp_sales.SaleLot, *, race_uid: str | None) -> dict[str, Any]:
     return {
         "sale_name": lot.sale.sale_name,
         "sale_co": lot.sale.sale_co,
+        "sale_short": sheet_mod.sale_short_name(lot.sale.sale_name),
+        "sale_year": lot.sale.sale_date.year,
         "lot": lot.display_lot,
+        "lot_no": lot.lot_no,
         "lot_id": lot.lot_id,
         "horse_uid": lot.horse_uid,
         "horse_name": lot.horse_name,
@@ -121,6 +125,30 @@ def _classify(
     entered.sort(key=lambda r: (r["race_date"], r.get("course") or "", r["lot"]))
     ran.sort(key=lambda r: (r.get("off_time") or time(0, 0), r.get("course") or "", r["lot"]))
     return entered, ran
+
+
+def _enrich_with_sheet(
+    rows: list[dict[str, Any]],
+    sheet_index: dict[tuple[int, str, int], sheet_mod.SheetRow],
+) -> tuple[int, int]:
+    """Mutate rows in place, attaching sheet enrichment fields where the
+    ``(year, sale_short, lot_no)`` key matches. Returns ``(matched, missing)``
+    for logging."""
+    matched = missing = 0
+    for row in rows:
+        short = row.get("sale_short")
+        if not short:
+            continue
+        key = (row["sale_year"], short, row["lot_no"])
+        sheet_row = sheet_index.get(key)
+        if sheet_row is None:
+            row["sheet_matched"] = False
+            missing += 1
+            continue
+        row["sheet_matched"] = True
+        row.update(sheet_mod.enrichment_fields(sheet_row))
+        matched += 1
+    return matched, missing
 
 
 def _filter_already_sent(
@@ -221,6 +249,20 @@ def run(
             entries_window_days=settings.entries_window_days,
         )
         log.info("entries window: today..+%d days", settings.entries_window_days)
+
+        try:
+            sheet_rows = sheet_mod.fetch_sheet(settings.sheet_csv_url)
+            sheet_index = sheet_mod.index_by_key(sheet_rows)
+            log.info("Sheet rows loaded: %d", len(sheet_rows))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Sheet fetch failed (%s): proceeding without enrichment", exc)
+            sheet_index = {}
+
+        if sheet_index:
+            em, mm = _enrich_with_sheet(entered, sheet_index)
+            log.info("Sheet enrichment (entered): matched=%d, missing=%d", em, mm)
+            rm, mr = _enrich_with_sheet(ran, sheet_index)
+            log.info("Sheet enrichment (ran_today): matched=%d, missing=%d", rm, mr)
 
         entered = _filter_already_sent(conn, today, "entered", entered)
         ran = _filter_already_sent(conn, today, "ran_today", ran)

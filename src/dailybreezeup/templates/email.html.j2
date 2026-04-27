@@ -14,15 +14,35 @@
     {% macro horse_cell(row) -%}
       <strong>{{ row.horse_name or ('Lot ' ~ row.lot ~ ' (unnamed)') }}</strong>
       <div style="color:#555;font-size:11px;margin-top:2px;">
-        {% if row.sire %}{{ row.sire }}{% endif %}{% if row.dam %} &times; {{ row.dam }}{% endif %}{% if row.damsire %} ({{ row.damsire }}){% endif %}
+        {% set sire = row.sheet_sire or row.sire %}
+        {% set dam = row.sheet_dam or row.dam %}
+        {% if sire %}{{ sire }}{% endif %}{% if dam %} &times; {{ dam }}{% endif %}{% if row.damsire %} ({{ row.damsire }}){% endif %}
       </div>
     {%- endmacro %}
 
     {% macro sale_cell(row) -%}
       {{ row.sale_name }}
       <div style="color:#555;font-size:11px;margin-top:2px;">
-        Lot {{ row.lot }}{% if row.price %} &middot; {{ row.price }}{% endif %}{% if row.buyer %} &middot; {{ row.buyer }}{% endif %}
+        {% set price = row.sheet_price or row.price %}
+        {% set buyer = row.sheet_buyer or row.buyer %}
+        Lot {{ row.lot }}{% if price %} &middot; {{ price }}{% endif %}{% if buyer %} &middot; {{ buyer }}{% endif %}
       </div>
+    {%- endmacro %}
+
+    {% macro ratings_cell(row) -%}
+      {% if row.sheet_matched %}
+        <div style="font-size:12px;line-height:1.5;">
+          {% if row.sheet_breeze_rating is not none %}<strong>BR</strong> {{ "%.1f"|format(row.sheet_breeze_rating) }}{% endif %}
+          {% if row.sheet_precocity_rating is not none %} &middot; <strong>PR</strong> {{ "%.1f"|format(row.sheet_precocity_rating) }}{% endif %}
+        </div>
+        <div style="color:#555;font-size:11px;">
+          {% if row.sheet_ot_rank is not none %}OT #{{ row.sheet_ot_rank }}{% endif %}
+          {% if row.sheet_ot_diff_m is not none %} ({{ "%+.2f"|format(row.sheet_ot_diff_m) }}){% endif %}
+          {% if row.sheet_sl_1f is not none %} &middot; SL {{ "%.2f"|format(row.sheet_sl_1f) }}{% endif %}
+        </div>
+      {% else %}
+        <span style="color:#999;font-size:11px;">—</span>
+      {% endif %}
     {%- endmacro %}
 
     {% if ran_today %}
@@ -33,6 +53,7 @@
           <th align="left">Horse</th>
           <th align="left">Sale</th>
           <th align="left">Race</th>
+          <th align="left">Ratings</th>
           <th align="left">Finish</th>
           <th align="left">SP</th>
         </tr>
@@ -48,6 +69,7 @@
             </a>
             <div style="color:#555;font-size:11px;">{{ row.race_name }}</div>
           </td>
+          <td>{{ ratings_cell(row) }}</td>
           <td><strong>{{ row.finishing_position or '-' }}</strong></td>
           <td>{{ row.sp or '-' }}</td>
         </tr>
@@ -65,6 +87,7 @@
           <th align="left">Sale</th>
           <th align="left">When</th>
           <th align="left">Course</th>
+          <th align="left">Ratings</th>
         </tr>
       </thead>
       <tbody>
@@ -76,6 +99,7 @@
           <td>
             <a href="{{ row.race_url }}" style="color:#1a5fb4;text-decoration:none;">{{ row.course }}</a>
           </td>
+          <td>{{ ratings_cell(row) }}</td>
         </tr>
       {% endfor %}
       </tbody>
