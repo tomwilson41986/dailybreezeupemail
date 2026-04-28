@@ -1,14 +1,15 @@
 name: daily-breezeup-email
 
-# Runs daily at 07:00 UTC (08:00 BST / 07:00 GMT) plus any manual dispatch.
-# The Windows-laptop scheduler in scripts/run-daily.ps1 is the primary
-# production path; this cron is a redundant backup. The README's old
-# "GH Actions runner IP gets bot-blocked" warning may no longer apply -
-# treat the first few cron runs as an experiment and watch the logs. If
-# Racing Post starts 503ing again, comment the schedule block out.
+# Cron is disabled: GitHub Actions runner IPs are bot-blocked by Racing
+# Post (Fastly). 28 Apr 2026: first cron run produced sales_found=4
+# (from the hardcoded fallback list), lots_total=0 (every data.json XHR
+# 503'd), so every cron email lands empty. Production runs from the
+# Windows laptop via Task Scheduler (see scripts/run-daily.ps1 + README).
+# Re-enable the cron block below only if RP/Fastly stops challenging the
+# CI IPs - manual --demo dispatches still work fine for layout tests.
 on:
-  schedule:
-    - cron: "0 7 * * *"
+  # schedule:
+  #   - cron: "0 7 * * *"
   workflow_dispatch:
     inputs:
       date:
