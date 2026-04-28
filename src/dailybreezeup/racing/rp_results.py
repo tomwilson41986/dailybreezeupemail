@@ -166,8 +166,14 @@ def parse_result_page_hits(
 # ---------- live fetcher ----------
 
 
-def _make_session() -> requests.Session:
-    s = requests.Session()
+def _make_session():
+    """See dailybreezeup.racing.rp_sales._make_session for rationale."""
+    try:
+        from curl_cffi import requests as cffi_requests
+        s = cffi_requests.Session(impersonate="chrome124")
+    except ImportError:
+        log.warning("curl_cffi not available; falling back to plain requests")
+        s = requests.Session()
     s.headers.update(_DOC_HEADERS)
     return s
 
