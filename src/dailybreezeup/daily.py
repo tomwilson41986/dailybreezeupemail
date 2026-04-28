@@ -262,19 +262,28 @@ def run(
         )
         log.info("entries window: today..+%d days", entries_window_days)
 
+        sheet_status: str
         try:
             sheet_rows = sheet_mod.fetch_sheet(settings.sheet_csv_url)
             sheet_index = sheet_mod.index_by_key(sheet_rows)
             log.info("Sheet rows loaded: %d", len(sheet_rows))
+            sheet_status = f"{len(sheet_rows)} rows loaded"
         except Exception as exc:  # noqa: BLE001
             log.warning("Sheet fetch failed (%s): proceeding without enrichment", exc)
             sheet_index = {}
+            sheet_status = f"fetch failed ({exc.__class__.__name__})"
 
         if sheet_index:
             em, mm = _enrich_with_sheet(entered, sheet_index)
             log.info("Sheet enrichment (entered): matched=%d, missing=%d", em, mm)
             rm, mr = _enrich_with_sheet(ran, sheet_index)
             log.info("Sheet enrichment (ran_today): matched=%d, missing=%d", rm, mr)
+            sheet_status = (
+                f"{len(sheet_rows)} rows loaded; "
+                f"entered matched={em}/missing={mm}, "
+                f"ran_today matched={rm}/missing={mr}"
+            )
+        diagnostics["sheet_status"] = sheet_status
 
         diagnostics["entered_in_window_pre_dedup"] = len(entered)
         diagnostics["ran_today_pre_dedup"] = len(ran)

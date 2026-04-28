@@ -121,6 +121,12 @@
     {% endif %}
     {% endif %}
 
+    {% if diagnostics and diagnostics.get("sheet_status") and total > 0 %}
+    <p style="margin-top:24px;color:#888;font-size:11px;">
+      Sheet enrichment: {{ diagnostics.sheet_status }}.
+    </p>
+    {% endif %}
+
     <p style="margin-top:32px;color:#999;font-size:11px;">
       Sent by dailybreezeup. Sourced from Racing Post bloodstock sale catalogues (entries flag, matched by horse_uid on results).
     </p>

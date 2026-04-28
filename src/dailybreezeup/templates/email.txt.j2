@@ -47,3 +47,7 @@ No breeze-up graduates ran today and none are entered in the next {{ entries_win
 {% endfor %}
 {% endif %}
 {% endif %}
+{% if diagnostics and diagnostics.get("sheet_status") and total > 0 %}
+
+Sheet enrichment: {{ diagnostics.sheet_status }}.
+{% endif %}
