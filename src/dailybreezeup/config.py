@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     entries_window_days: int = 5
     db_path: Path = Field(default=Path("data/breezeup.sqlite"))
 
+    sheet_csv_url: str = (
+        "https://docs.google.com/spreadsheets/d/"
+        "12neJo7BsCsHg20m-es5ERkLJCevUzXyMDnvV9-ygrMk/export?format=csv"
+    )
+
     @property
     def email_to_list(self) -> list[str]:
         return [x.strip() for x in self.email_to.split(",") if x.strip()]

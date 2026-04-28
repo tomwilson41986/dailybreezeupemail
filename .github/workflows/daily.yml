@@ -1,11 +1,14 @@
 name: daily-breezeup-email
 
-# Daily cron is disabled because the GitHub Actions runner IP gets challenged
-# by Racing Post's bot filter (Fastly), so server-side fetches consistently
-# fail. Production runs are scheduled on a laptop instead. This workflow is
-# kept for ad-hoc manual triggers - particularly --demo which bypasses the
-# live fetch entirely and is useful for verifying email rendering.
+# Runs daily at 07:00 UTC (08:00 BST / 07:00 GMT) plus any manual dispatch.
+# The Windows-laptop scheduler in scripts/run-daily.ps1 is the primary
+# production path; this cron is a redundant backup. The README's old
+# "GH Actions runner IP gets bot-blocked" warning may no longer apply -
+# treat the first few cron runs as an experiment and watch the logs. If
+# Racing Post starts 503ing again, comment the schedule block out.
 on:
+  schedule:
+    - cron: "0 7 * * *"
   workflow_dispatch:
     inputs:
       date:
@@ -19,6 +22,12 @@ on:
         description: "Skip live RP fetch; render with hardcoded Craven 2026 lots"
         required: false
         default: "false"
+      entries_window_days:
+        description: "Override forward window (days). Blank = use repo default (5)."
+        required: false
+      notify_on_empty:
+        description: "Send 'no horses today' email if total=0. Blank = use repo default. Type 'true' or 'false'."
+        required: false
 
 jobs:
   send:
@@ -29,8 +38,17 @@ jobs:
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
       EMAIL_FROM:         ${{ secrets.EMAIL_FROM }}
       EMAIL_TO:           ${{ secrets.EMAIL_TO }}
-      NOTIFY_ON_EMPTY:    ${{ vars.NOTIFY_ON_EMPTY || 'false' }}
-      ENTRIES_WINDOW_DAYS: ${{ vars.ENTRIES_WINDOW_DAYS || '5' }}
+      # Per-dispatch input wins; otherwise fall back to repo variable, then default.
+      NOTIFY_ON_EMPTY: >-
+        ${{ github.event.inputs.notify_on_empty
+            || vars.NOTIFY_ON_EMPTY
+            || 'false' }}
+      ENTRIES_WINDOW_DAYS: >-
+        ${{ github.event.inputs.entries_window_days
+            || vars.ENTRIES_WINDOW_DAYS
+            || '5' }}
+      # Lets a fork/repo-variable point at a different sheet without code changes.
+      SHEET_CSV_URL: ${{ vars.SHEET_CSV_URL }}
 
     steps:
       - uses: actions/checkout@v4
@@ -50,6 +68,29 @@ jobs:
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then args="$args --dry-run"; fi
           if [ "${{ github.event.inputs.demo }}" = "true" ]; then args="$args --demo"; fi
           python -m dailybreezeup.daily $args
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Daily breeze-up email"
+            echo ""
+            echo "- date: \`${{ github.event.inputs.date || 'today UK' }}\`"
+            echo "- dry_run: \`${{ github.event.inputs.dry_run || 'false' }}\`"
+            echo "- demo: \`${{ github.event.inputs.demo || 'false' }}\`"
+            echo "- entries_window_days: \`${ENTRIES_WINDOW_DAYS}\`"
+            echo "- notify_on_empty: \`${NOTIFY_ON_EMPTY}\`"
+            if [ -f data/last_preview.txt ]; then
+              echo ""
+              echo "<details><summary>Plain-text preview</summary>"
+              echo ""
+              echo '```'
+              cat data/last_preview.txt
+              echo '```'
+              echo ""
+              echo "</details>"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload preview
         if: always()

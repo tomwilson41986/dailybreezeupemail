@@ -73,6 +73,19 @@ def test_render_empty_case():
     assert "next 5 days" in p.html  # default window when not specified
 
 
+def test_render_empty_case_includes_diagnostics():
+    p = render(
+        run_date=date(2026, 4, 24),
+        entered=[],
+        ran_today=[],
+        diagnostics={"mode": "live", "sales_found": 0, "dedup_dropped_entered": 3},
+    )
+    assert "Run diagnostics" in p.html
+    assert "sales_found" in p.html
+    assert "dedup_dropped_entered" in p.text
+    assert "mode: live" in p.text
+
+
 def test_render_links_race_urls_in_html():
     row = _ran_row()
     p = render(run_date=date(2026, 4, 24), entered=[], ran_today=[row])

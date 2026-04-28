@@ -2,10 +2,18 @@ Breeze-up graduates — {{ run_date.strftime("%A %d %B %Y") }}
 {{ total }} horse{{ '' if total == 1 else 's' }}
 
 {% macro block(row) -%}
+{% set sire = row.sheet_sire or row.sire %}
+{% set dam = row.sheet_dam or row.dam %}
+{% set price = row.sheet_price or row.price %}
+{% set buyer = row.sheet_buyer or row.buyer %}
 {{ row.horse_name or ('Lot ' ~ row.lot ~ ' (unnamed)') }}
-  {% if row.sire or row.dam %}{{ row.sire or '?' }} x {{ row.dam or '?' }}{% if row.damsire %} ({{ row.damsire }}){% endif %}
+  {% if sire or dam %}{{ sire or '?' }} x {{ dam or '?' }}{% if row.damsire %} ({{ row.damsire }}){% endif %}
 {% endif %}
-  Sale: {{ row.sale_name }} / Lot {{ row.lot }}{% if row.price %} / {{ row.price }}{% endif %}{% if row.buyer %} / {{ row.buyer }}{% endif %}
+  Sale: {{ row.sale_name }} / Lot {{ row.lot }}{% if price %} / {{ price }}{% endif %}{% if buyer %} / {{ buyer }}{% endif %}
+{% if row.sheet_matched %}
+  Ratings: BR {{ "%.1f"|format(row.sheet_breeze_rating) if row.sheet_breeze_rating is not none else '-' }} / PR {{ "%.1f"|format(row.sheet_precocity_rating) if row.sheet_precocity_rating is not none else '-' }} / OT #{{ row.sheet_ot_rank if row.sheet_ot_rank is not none else '-' }}
+  SL 1F: {{ "%.2f"|format(row.sheet_sl_1f) if row.sheet_sl_1f is not none else '-' }} / SL GO: {{ "%.2f"|format(row.sheet_sl_go) if row.sheet_sl_go is not none else '-' }}
+{% endif %}
 {%- endmacro %}
 
 {% if ran_today %}
@@ -31,4 +39,11 @@ Breeze-up graduates — {{ run_date.strftime("%A %d %B %Y") }}
 
 {% if total == 0 %}
 No breeze-up graduates ran today and none are entered in the next {{ entries_window_days }} day{{ '' if entries_window_days == 1 else 's' }}.
+{% if diagnostics %}
+
+---- Run diagnostics ----
+{% for k, v in diagnostics.items() %}
+{{ k }}: {{ v }}
+{% endfor %}
+{% endif %}
 {% endif %}

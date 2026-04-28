@@ -23,6 +23,7 @@ from dailybreezeup.config import Settings, load as load_settings
 from dailybreezeup.db import session
 from dailybreezeup.emailer import EmailPayload, render, send
 from dailybreezeup.racing import rp_results, rp_sales
+from dailybreezeup import sheet as sheet_mod
 
 log = logging.getLogger("dailybreezeup.daily")
 UK = ZoneInfo("Europe/London")
@@ -45,7 +46,10 @@ def _lot_row(lot: rp_sales.SaleLot, *, race_uid: str | None) -> dict[str, Any]:
     return {
         "sale_name": lot.sale.sale_name,
         "sale_co": lot.sale.sale_co,
+        "sale_short": sheet_mod.sale_short_name(lot.sale.sale_name),
+        "sale_year": lot.sale.sale_date.year,
         "lot": lot.display_lot,
+        "lot_no": lot.lot_no,
         "lot_id": lot.lot_id,
         "horse_uid": lot.horse_uid,
         "horse_name": lot.horse_name,
@@ -123,6 +127,30 @@ def _classify(
     return entered, ran
 
 
+def _enrich_with_sheet(
+    rows: list[dict[str, Any]],
+    sheet_index: dict[tuple[int, str, int], sheet_mod.SheetRow],
+) -> tuple[int, int]:
+    """Mutate rows in place, attaching sheet enrichment fields where the
+    ``(year, sale_short, lot_no)`` key matches. Returns ``(matched, missing)``
+    for logging."""
+    matched = missing = 0
+    for row in rows:
+        short = row.get("sale_short")
+        if not short:
+            continue
+        key = (row["sale_year"], short, row["lot_no"])
+        sheet_row = sheet_index.get(key)
+        if sheet_row is None:
+            row["sheet_matched"] = False
+            missing += 1
+            continue
+        row["sheet_matched"] = True
+        row.update(sheet_mod.enrichment_fields(sheet_row))
+        matched += 1
+    return matched, missing
+
+
 def _filter_already_sent(
     conn: sqlite3.Connection,
     today: date,
@@ -191,6 +219,7 @@ def run(
 
         all_lots: list[rp_sales.SaleLot]
         hits: list[rp_results.ResultHit] = []
+        diagnostics: dict[str, Any] = {"mode": "demo" if demo else "live"}
         if demo:
             log.warning("DEMO MODE: using static fixture lots, no live RP fetch")
             all_lots = rp_sales.demo_lots()
@@ -202,6 +231,7 @@ def run(
             log.info("Sales found: %d", len(sales))
             for s in sales:
                 log.info("  %s  (%s %s)", s.sale_name, s.sale_date.isoformat(), s.venue_uid)
+            diagnostics["sales_found"] = len(sales)
 
             all_lots = []
             for sale in sales:
@@ -209,27 +239,68 @@ def run(
                 log.info("  %s: %d lots (entered=%d)",
                          sale.sale_name, len(lots), sum(1 for lot in lots if lot.entered))
                 all_lots.extend(lots)
+            diagnostics["lots_total"] = len(all_lots)
+            diagnostics["lots_entered_any_date"] = sum(1 for lot in all_lots if lot.entered)
 
             uids = {lot.horse_uid for lot in all_lots if lot.horse_uid is not None}
             log.info("Horse uids across all catalogues: %d", len(uids))
             if uids:
                 hits = rp_results.fetch_hits_for_uids(today, uids)
                 log.info("Result hits for today: %d", len(hits))
+            diagnostics["result_hits"] = len(hits)
+
+        entries_window_days = settings.entries_window_days
+        if demo:
+            # Demo lots have static future race dates that may sit far outside
+            # the production window. Force the window wide so --demo always
+            # renders a populated body for layout verification.
+            entries_window_days = 9999
 
         entered, ran = _classify(
             today, all_lots, hits,
-            entries_window_days=settings.entries_window_days,
+            entries_window_days=entries_window_days,
         )
-        log.info("entries window: today..+%d days", settings.entries_window_days)
+        log.info("entries window: today..+%d days", entries_window_days)
 
-        entered = _filter_already_sent(conn, today, "entered", entered)
-        ran = _filter_already_sent(conn, today, "ran_today", ran)
+        try:
+            sheet_rows = sheet_mod.fetch_sheet(settings.sheet_csv_url)
+            sheet_index = sheet_mod.index_by_key(sheet_rows)
+            log.info("Sheet rows loaded: %d", len(sheet_rows))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Sheet fetch failed (%s): proceeding without enrichment", exc)
+            sheet_index = {}
+
+        if sheet_index:
+            em, mm = _enrich_with_sheet(entered, sheet_index)
+            log.info("Sheet enrichment (entered): matched=%d, missing=%d", em, mm)
+            rm, mr = _enrich_with_sheet(ran, sheet_index)
+            log.info("Sheet enrichment (ran_today): matched=%d, missing=%d", rm, mr)
+
+        diagnostics["entered_in_window_pre_dedup"] = len(entered)
+        diagnostics["ran_today_pre_dedup"] = len(ran)
+        if demo:
+            log.info("DEMO: skipping email_log dedup so the body always renders")
+        else:
+            pre_entered, pre_ran = len(entered), len(ran)
+            entered = _filter_already_sent(conn, today, "entered", entered)
+            ran = _filter_already_sent(conn, today, "ran_today", ran)
+            if pre_entered != len(entered) or pre_ran != len(ran):
+                dropped_entered = pre_entered - len(entered)
+                dropped_ran = pre_ran - len(ran)
+                log.info(
+                    "dedup filtered %d entered and %d ran_today rows already sent today",
+                    dropped_entered, dropped_ran,
+                )
+                diagnostics["dedup_dropped_entered"] = dropped_entered
+                diagnostics["dedup_dropped_ran_today"] = dropped_ran
+        diagnostics["entries_window_days"] = entries_window_days
 
         payload = render(
             run_date=today,
             entered=entered,
             ran_today=ran,
-            entries_window_days=settings.entries_window_days,
+            entries_window_days=entries_window_days,
+            diagnostics=diagnostics,
         )
         _write_preview(payload)
 
