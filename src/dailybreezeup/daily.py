@@ -130,10 +130,12 @@ def _classify(
 def _enrich_with_sheet(
     rows: list[dict[str, Any]],
     sheet_index: dict[tuple[int, str, int], sheet_mod.SheetRow],
+    sale_totals: dict[tuple[int, str], int] | None = None,
 ) -> tuple[int, int]:
     """Mutate rows in place, attaching sheet enrichment fields where the
     ``(year, sale_short, lot_no)`` key matches. Returns ``(matched, missing)``
     for logging."""
+    sale_totals = sale_totals or {}
     matched = missing = 0
     for row in rows:
         short = row.get("sale_short")
@@ -146,9 +148,23 @@ def _enrich_with_sheet(
             missing += 1
             continue
         row["sheet_matched"] = True
-        row.update(sheet_mod.enrichment_fields(sheet_row))
+        sale_total = sale_totals.get((row["sale_year"], short))
+        row.update(sheet_mod.enrichment_fields(sheet_row, sale_total=sale_total))
         matched += 1
     return matched, missing
+
+
+def _resort_by_rating(rows: list[dict[str, Any]]) -> None:
+    """Within each race day + course, surface the highest Breeze Rating first
+    so the most interesting horses lead the section."""
+    rows.sort(
+        key=lambda r: (
+            r.get("race_date"),
+            r.get("course") or "",
+            -(r.get("sheet_breeze_rating") or 0.0),
+            r["lot"],
+        )
+    )
 
 
 def _filter_already_sent(
@@ -266,23 +282,26 @@ def run(
         try:
             sheet_rows = sheet_mod.fetch_sheet(settings.sheet_csv_url)
             sheet_index = sheet_mod.index_by_key(sheet_rows)
+            sale_totals = sheet_mod.count_by_sale(sheet_rows)
             log.info("Sheet rows loaded: %d", len(sheet_rows))
             sheet_status = f"{len(sheet_rows)} rows loaded"
         except Exception as exc:  # noqa: BLE001
             log.warning("Sheet fetch failed (%s): proceeding without enrichment", exc)
             sheet_index = {}
+            sale_totals = {}
             sheet_status = f"fetch failed ({exc.__class__.__name__})"
 
         if sheet_index:
-            em, mm = _enrich_with_sheet(entered, sheet_index)
+            em, mm = _enrich_with_sheet(entered, sheet_index, sale_totals)
             log.info("Sheet enrichment (entered): matched=%d, missing=%d", em, mm)
-            rm, mr = _enrich_with_sheet(ran, sheet_index)
+            rm, mr = _enrich_with_sheet(ran, sheet_index, sale_totals)
             log.info("Sheet enrichment (ran_today): matched=%d, missing=%d", rm, mr)
             sheet_status = (
                 f"{len(sheet_rows)} rows loaded; "
                 f"entered matched={em}/missing={mm}, "
                 f"ran_today matched={rm}/missing={mr}"
             )
+            _resort_by_rating(entered)
         diagnostics["sheet_status"] = sheet_status
 
         diagnostics["entered_in_window_pre_dedup"] = len(entered)

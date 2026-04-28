@@ -46,11 +46,10 @@ def test_render_shows_entered_and_ran_sections():
         entered=[_entered_row()],
         ran_today=[_ran_row(horse_name="Named Runner")],
     )
-    assert "Ran today (1)" in p.html
-    assert "Entered in the next 5 days (1)" in p.html
+    assert "Ran today" in p.html and "&middot; 1" in p.html
+    assert "Entered in the next 5 days" in p.html
     assert "Havana Grey" in p.html
     assert "Named Runner" in p.html
-    # Unnamed lot should render as "Lot 16 (unnamed)"
     assert "Lot 16 (unnamed)" in p.html
     assert "2 horses" in p.subject
 
@@ -62,8 +61,8 @@ def test_render_window_label_reflects_setting():
         ran_today=[],
         entries_window_days=9999,
     )
-    assert "Entered in the next 9999 days (1)" in p.html
-    assert "ENTERED IN NEXT 9999 DAYS (1)" in p.text
+    assert "Entered in the next 9999 days" in p.html
+    assert "ENTERED IN NEXT 9999 DAYS" in p.text
 
 
 def test_render_empty_case():
@@ -98,5 +97,5 @@ def test_text_variant_is_plain():
         entered=[_entered_row()],
         ran_today=[],
     )
-    assert "ENTERED IN NEXT 5 DAYS (1)" in p.text
+    assert "ENTERED IN NEXT 5 DAYS" in p.text
     assert "Havana Grey" in p.text

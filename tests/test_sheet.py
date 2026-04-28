@@ -1,4 +1,5 @@
 from dailybreezeup.sheet import (
+    count_by_sale,
     enrichment_fields,
     index_by_key,
     parse_sheet_csv,
@@ -50,3 +51,16 @@ def test_enrichment_fields_returns_subset():
     assert fields["sheet_breeze_rating"] == 85.7
     assert fields["sheet_sire"] == "Havana Grey (GB)"
     assert "sheet_buyer" in fields
+    assert fields["sheet_sale_total"] is None  # default
+
+
+def test_enrichment_fields_passes_sale_total_for_ot_denominator():
+    rows = parse_sheet_csv(CSV_SAMPLE)
+    fields = enrichment_fields(rows[0], sale_total=182)
+    assert fields["sheet_sale_total"] == 182
+
+
+def test_count_by_sale():
+    rows = parse_sheet_csv(CSV_SAMPLE)
+    totals = count_by_sale(rows)
+    assert totals[(2026, "Craven")] == 3
