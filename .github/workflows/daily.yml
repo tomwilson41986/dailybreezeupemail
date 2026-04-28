@@ -1,11 +1,14 @@
 name: daily-breezeup-email
 
-# Daily cron is disabled because the GitHub Actions runner IP gets challenged
-# by Racing Post's bot filter (Fastly), so server-side fetches consistently
-# fail. Production runs are scheduled on a laptop instead. This workflow is
-# kept for ad-hoc manual triggers - particularly --demo which bypasses the
-# live fetch entirely and is useful for verifying email rendering.
+# Runs daily at 07:00 UTC (08:00 BST / 07:00 GMT) plus any manual dispatch.
+# The Windows-laptop scheduler in scripts/run-daily.ps1 is the primary
+# production path; this cron is a redundant backup. The README's old
+# "GH Actions runner IP gets bot-blocked" warning may no longer apply -
+# treat the first few cron runs as an experiment and watch the logs. If
+# Racing Post starts 503ing again, comment the schedule block out.
 on:
+  schedule:
+    - cron: "0 7 * * *"
   workflow_dispatch:
     inputs:
       date:
