@@ -1,15 +1,17 @@
 name: daily-breezeup-email
 
-# Cron is disabled: GitHub Actions runner IPs are bot-blocked by Racing
-# Post (Fastly). 28 Apr 2026: first cron run produced sales_found=4
-# (from the hardcoded fallback list), lots_total=0 (every data.json XHR
-# 503'd), so every cron email lands empty. Production runs from the
-# Windows laptop via Task Scheduler (see scripts/run-daily.ps1 + README).
-# Re-enable the cron block below only if RP/Fastly stops challenging the
-# CI IPs - manual --demo dispatches still work fine for layout tests.
+# Daily 07:00 UTC (08:00 BST / 07:00 GMT) plus manual dispatch.
+# 28 Apr 2026: the previous attempt at this cron failed because the
+# default `requests` library exposes a Python TLS fingerprint that
+# Racing Post's Fastly bot filter rejects from CI IPs. We now use
+# curl_cffi (impersonate=chrome124), which mimics a real Chrome TLS/HTTP-2
+# handshake; sandbox testing confirms 885 lots scraped successfully from
+# a cloud IP. If the cron starts emitting sales_found=4 lots_total=0
+# again, RP has tightened their rules - either bump the impersonate
+# version or fall back to the laptop scheduler / a Hetzner VPS.
 on:
-  # schedule:
-  #   - cron: "0 7 * * *"
+  schedule:
+    - cron: "0 7 * * *"
   workflow_dispatch:
     inputs:
       date:

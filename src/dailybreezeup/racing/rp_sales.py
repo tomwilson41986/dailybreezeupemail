@@ -266,8 +266,21 @@ def parse_lots_page(body: str, sale: Sale) -> tuple[list[SaleLot], int, int]:
 # ---------- live fetchers ----------
 
 
-def _make_session() -> requests.Session:
-    s = requests.Session()
+def _make_session():
+    """Build the HTTP session.
+
+    Uses curl_cffi when available so the TLS/HTTP-2 fingerprint matches a
+    real Chrome - essential for getting past Racing Post's Fastly bot
+    challenge from cloud IPs (GitHub Actions, AWS, etc.). Falls back to
+    plain requests if curl_cffi isn't importable for any reason; on a
+    home/laptop IP that path normally still works.
+    """
+    try:
+        from curl_cffi import requests as cffi_requests
+        s = cffi_requests.Session(impersonate="chrome124")
+    except ImportError:
+        log.warning("curl_cffi not available; falling back to plain requests")
+        s = requests.Session()
     s.headers.update(_DOC_HEADERS)
     return s
 
