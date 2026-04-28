@@ -14,6 +14,8 @@ from dailybreezeup.config import Settings
 
 log = logging.getLogger(__name__)
 
+_DIVIDER = "─" * 60
+
 
 @dataclass
 class EmailPayload:
@@ -31,6 +33,117 @@ def _env() -> Environment:
     )
 
 
+def _fmt_card(row: dict[str, Any], *, ran: bool) -> list[str]:
+    sire = row.get("sheet_sire") or row.get("sire") or ""
+    dam = row.get("sheet_dam") or row.get("dam") or ""
+    damsire = row.get("damsire") or ""
+    price = row.get("sheet_price") or row.get("price") or ""
+    buyer = row.get("sheet_buyer") or row.get("buyer") or ""
+    short_sale = (
+        f"{row['sale_short']} {row['sale_year']}"
+        if row.get("sale_short")
+        else row.get("sale_name", "")
+    )
+    horse_label = row.get("horse_name") or f"Lot {row['lot']} (unnamed)"
+
+    lines: list[str] = [_DIVIDER, f"LOT {row['lot']} · {short_sale}", horse_label]
+    if sire or dam:
+        ped = f"{sire or '?'} × {dam or '?'}"
+        if damsire:
+            ped += f" (by {damsire})"
+        lines.append(f"    {ped}")
+
+    if ran:
+        finish = row.get("finishing_position") or "—"
+        sp = row.get("sp") or "—"
+        off = row.get("off_time")
+        race_name = row.get("race_name") or ""
+        time_prefix = f"{off.strftime('%H:%M')} " if off else ""
+        race_suffix = f" · {race_name}" if race_name else ""
+        lines.append(f"    ► Finish {finish}  ·  SP {sp}")
+        lines.append(f"    ► {time_prefix}{row['course']}{race_suffix}")
+    else:
+        lines.append(f"    ► {row['race_date']:%a %d %b} · {row['course']}")
+
+    if row.get("sheet_matched"):
+        br = row.get("sheet_breeze_rating")
+        pr = row.get("sheet_precocity_rating")
+        if br is not None or pr is not None:
+            br_s = f"{br:.1f}" if br is not None else "—"
+            pr_s = f"{pr:.1f}" if pr is not None else "—"
+            lines.append(f"    Breeze {br_s}  ·  Precocity {pr_s}")
+
+        ot_rank = row.get("sheet_ot_rank")
+        ot_diff = row.get("sheet_ot_diff_m")
+        sl_1f = row.get("sheet_sl_1f")
+        sl_go = row.get("sheet_sl_go")
+        if ot_rank is not None or sl_1f is not None or sl_go is not None:
+            ot_total = row.get("sheet_sale_total")
+            ot_part = f"OT #{ot_rank if ot_rank is not None else '—'}"
+            if ot_total:
+                ot_part += f"/{ot_total}"
+            if ot_diff is not None:
+                ot_part += f" ({ot_diff:+.2f}s)"
+            sl_part = (
+                f"SL 1F {sl_1f:.2f}" if sl_1f is not None else "SL 1F —"
+            ) + (
+                f"  ·  Going {sl_go:.2f}" if sl_go is not None else "  ·  Going —"
+            )
+            lines.append(f"    {ot_part}  ·  {sl_part}")
+
+    if price or buyer:
+        commercial = " · ".join(p for p in (price, buyer) if p)
+        lines.append(f"    {commercial}")
+
+    lines.append(f"    {row['race_url']}")
+    return lines
+
+
+def _render_text(
+    *,
+    run_date: date,
+    entered: list[dict[str, Any]],
+    ran_today: list[dict[str, Any]],
+    entries_window_days: int,
+    total: int,
+    diagnostics: dict[str, Any],
+) -> str:
+    plural = "" if total == 1 else "s"
+    parts: list[str] = [
+        f"Breeze-up graduates — {run_date:%A %d %B %Y}",
+        f"{total} horse{plural}",
+        "",
+    ]
+    if ran_today:
+        parts.append(f"═══ RAN TODAY · {len(ran_today)} ═══")
+        for row in ran_today:
+            parts.extend(_fmt_card(row, ran=True))
+            parts.append("")
+    if entered:
+        win_plural = "" if entries_window_days == 1 else "S"
+        parts.append(
+            f"═══ ENTERED IN NEXT {entries_window_days} DAY{win_plural} · {len(entered)} ═══"
+        )
+        for row in entered:
+            parts.extend(_fmt_card(row, ran=False))
+            parts.append("")
+    if total == 0:
+        parts.append(
+            f"No breeze-up graduates ran today and none are entered in the next "
+            f"{entries_window_days} day{'' if entries_window_days == 1 else 's'}."
+        )
+        if diagnostics:
+            parts.append("")
+            parts.append("---- Run diagnostics ----")
+            for k, v in diagnostics.items():
+                parts.append(f"{k}: {v}")
+    sheet_status = diagnostics.get("sheet_status")
+    if sheet_status and total > 0:
+        parts.append("")
+        parts.append(f"Sheet enrichment: {sheet_status}.")
+    return "\n".join(parts) + "\n"
+
+
 def render(
     *,
     run_date: date,
@@ -39,6 +152,7 @@ def render(
     entries_window_days: int = 5,
     diagnostics: dict[str, Any] | None = None,
 ) -> EmailPayload:
+    diagnostics = diagnostics or {}
     env = _env()
     total = len(entered) + len(ran_today)
     subject = (
@@ -52,10 +166,17 @@ def render(
         "ran_today": ran_today,
         "entries_window_days": entries_window_days,
         "subject": subject,
-        "diagnostics": diagnostics or {},
+        "diagnostics": diagnostics,
     }
     html = env.get_template("email.html.j2").render(**context)
-    text = env.get_template("email.txt.j2").render(**context)
+    text = _render_text(
+        run_date=run_date,
+        entered=entered,
+        ran_today=ran_today,
+        entries_window_days=entries_window_days,
+        total=total,
+        diagnostics=diagnostics,
+    )
     return EmailPayload(subject=subject, html=html, text=text)
 
 

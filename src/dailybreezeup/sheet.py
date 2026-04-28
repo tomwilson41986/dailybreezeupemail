@@ -143,7 +143,15 @@ def index_by_key(rows: Iterable[SheetRow]) -> dict[tuple[int, str, int], SheetRo
     return {row.key: row for row in rows}
 
 
-def enrichment_fields(row: SheetRow) -> dict[str, object]:
+def count_by_sale(rows: Iterable[SheetRow]) -> dict[tuple[int, str], int]:
+    """Total rows per (year, sale_short) — denominator for OT rank display."""
+    out: dict[tuple[int, str], int] = {}
+    for row in rows:
+        out[(row.year, row.sale)] = out.get((row.year, row.sale), 0) + 1
+    return out
+
+
+def enrichment_fields(row: SheetRow, *, sale_total: int | None = None) -> dict[str, object]:
     """The subset of sheet columns we surface in the email."""
     return {
         "sheet_breeze_rating": row.breeze_rating,
@@ -152,6 +160,7 @@ def enrichment_fields(row: SheetRow) -> dict[str, object]:
         "sheet_ot_diff_m": row.ot_diff_m,
         "sheet_sl_1f": row.sl_1f,
         "sheet_sl_go": row.sl_go,
+        "sheet_sale_total": sale_total,
         "sheet_sire": row.sire,
         "sheet_dam": row.dam,
         "sheet_vendor": row.vendor,
