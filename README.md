@@ -1,14 +1,19 @@
 # Daily Breeze-Up Email
 
-A once-a-day email listing breeze-up sale graduates that either **ran today** or are **entered to run in the next 5 days**. Source is Racing Post's bloodstock sale catalogue (the authoritative join between a lot and its race entry).
+Two scheduled emails per day listing breeze-up sale graduates:
+
+- **Morning (07:00 UK)** — `--mode morning`: entries & declarations for lots entered to run in the next 3 days. Suppressed when empty unless `NOTIFY_ON_EMPTY=true`.
+- **Evening (21:00 UK)** — `--mode evening`: results for lots that ran today. Always sent — quiet days get a "No Results Today" notice.
+
+Source is Racing Post's bloodstock sale catalogue (the authoritative join between a lot and its race entry).
 
 ## How it works
 
 1. **Discover sales**: fetch `https://www.racingpost.com/bloodstock/sales/catalogues/` and filter to sale records whose name matches /breeze.?up/i in the current calendar year. Typical 2026 set: Tattersalls Craven, Goffs UK 2yo Breeze Up, Arqana May 2yo Breeze Up, Tattersalls Ireland Breeze Up.
 2. **Fetch lots per sale**: paginate `.../catalogues/<venue_uid>/<YYYY-MM-DD>/data.json`. Each row is one catalogued lot with an `entered` flag and, if entered, an `entry_details` pointer to the race (course + date + race_uid).
 3. **Classify**:
-   - **Entered (next 5 days)**: rows where `entered=true` AND `entry_details.race_date` is between today and today+5 inclusive.
-   - **Ran today**: collect every `horse_uid` across all catalogues, fetch `/results/<today>`, walk each race page, and emit one row per `/profile/horse/<uid>` link whose uid is in our set.
+   - **Morning · Entered (next 3 days)**: rows where `entered=true` AND `entry_details.race_date` is between today and today+3 inclusive.
+   - **Evening · Ran today**: collect every `horse_uid` across all catalogues, fetch `/results/<today>`, walk each race page, and emit one row per `/profile/horse/<uid>` link whose uid is in our set.
 4. **Render** HTML + plain-text email, send via Gmail SMTP, log to `email_log` to dedup re-runs within the day.
 
 The catalogue JSON is authoritative: Racing Post does the lot → horse → race join for us. We don't match by name (breeze-up lots are usually unnamed at sale time anyway).
@@ -50,7 +55,7 @@ GMAIL_USER=your.address@gmail.com
 GMAIL_APP_PASSWORD=your16charapppassword
 EMAIL_TO=racingsquared@gmail.com
 NOTIFY_ON_EMPTY=true
-ENTRIES_WINDOW_DAYS=5
+ENTRIES_WINDOW_DAYS=3
 ```
 
 `.env` is gitignored — the values stay on your machine.
@@ -58,7 +63,8 @@ ENTRIES_WINDOW_DAYS=5
 ### 4. Manual smoke test
 
 ```powershell
-.\.venv\Scripts\breezeup-daily --dry-run
+.\.venv\Scripts\breezeup-daily --mode morning --dry-run
+.\.venv\Scripts\breezeup-daily --mode evening --dry-run
 ```
 
 Expected log output (verbatim shape):
@@ -82,19 +88,13 @@ For the full real send (no `--dry-run`):
 
 The email should arrive at `EMAIL_TO` within a minute.
 
-### 5. Schedule it daily at 07:00 UK
+### 5. Schedule both runs (07:00 morning, 21:00 evening UK)
 
 Run this **once** in an elevated PowerShell, replacing the path if you cloned elsewhere:
 
 ```powershell
 $RepoRoot = "$env:USERPROFILE\dailybreezeupemail"
 $Wrapper  = Join-Path $RepoRoot "scripts\run-daily.ps1"
-
-$Action    = New-ScheduledTaskAction `
-    -Execute "powershell.exe" `
-    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$Wrapper`""
-
-$Trigger   = New-ScheduledTaskTrigger -Daily -At 7:00am
 
 $Settings  = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
@@ -104,32 +104,51 @@ $Settings  = New-ScheduledTaskSettingsSet `
 
 $Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
 
+# Morning: entries & declarations for the next 3 days, 07:00 UK
+$MorningAction = New-ScheduledTaskAction `
+    -Execute "powershell.exe" `
+    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$Wrapper`" -Mode morning"
 Register-ScheduledTask `
-    -TaskName "BreezeupDaily" `
-    -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal `
-    -Description "Daily breeze-up email - 07:00 UK"
+    -TaskName "BreezeupDaily-Morning" `
+    -Action $MorningAction `
+    -Trigger (New-ScheduledTaskTrigger -Daily -At 7:00am) `
+    -Settings $Settings -Principal $Principal `
+    -Description "Breeze-up entries email - 07:00 UK"
+
+# Evening: results that ran today, 21:00 UK
+$EveningAction = New-ScheduledTaskAction `
+    -Execute "powershell.exe" `
+    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$Wrapper`" -Mode evening"
+Register-ScheduledTask `
+    -TaskName "BreezeupDaily-Evening" `
+    -Action $EveningAction `
+    -Trigger (New-ScheduledTaskTrigger -Daily -At 9:00pm) `
+    -Settings $Settings -Principal $Principal `
+    -Description "Breeze-up results email - 21:00 UK"
 ```
 
-`-StartWhenAvailable` means if the laptop is asleep at 07:00 the task runs as soon as it wakes; you don't lose a day.
+`-StartWhenAvailable` means if the laptop is asleep at the trigger time the task runs as soon as it wakes; you don't lose a day.
 
-To verify it's installed: open `taskschd.msc`, scroll to "Task Scheduler Library", look for `BreezeupDaily`.
+To verify they're installed: open `taskschd.msc`, scroll to "Task Scheduler Library", look for `BreezeupDaily-Morning` and `BreezeupDaily-Evening`.
 
-To trigger it manually for testing without waiting for 07:00:
+To trigger one manually for testing:
 
 ```powershell
-Start-ScheduledTask -TaskName "BreezeupDaily"
+Start-ScheduledTask -TaskName "BreezeupDaily-Morning"
+Start-ScheduledTask -TaskName "BreezeupDaily-Evening"
 ```
 
-To remove it:
+To remove them:
 
 ```powershell
-Unregister-ScheduledTask -TaskName "BreezeupDaily" -Confirm:$false
+Unregister-ScheduledTask -TaskName "BreezeupDaily-Morning" -Confirm:$false
+Unregister-ScheduledTask -TaskName "BreezeupDaily-Evening" -Confirm:$false
 ```
 
 ### 6. Where to look when something goes wrong
 
-- **`logs\breezeup-YYYY-MM-DD.log`** in the repo — captures every run's full stdout/stderr.
-- **Task Scheduler GUI** → BreezeupDaily → History tab — shows last-run result and any system-level errors.
+- **`logs\breezeup-YYYY-MM-DD-<mode>.log`** in the repo — captures every run's full stdout/stderr.
+- **Task Scheduler GUI** → BreezeupDaily-Morning / BreezeupDaily-Evening → History tab — shows last-run result and any system-level errors.
 - **Run tests** to make sure your environment is sane after a code update:
   ```powershell
   .\.venv\Scripts\pip install -e ".[dev]"
@@ -144,8 +163,8 @@ Unregister-ScheduledTask -TaskName "BreezeupDaily" -Confirm:$false
 | `GMAIL_APP_PASSWORD` | same | 16-char [app password](https://myaccount.google.com/apppasswords) (requires 2FA on the account) |
 | `EMAIL_FROM` | optional, same | Defaults to `GMAIL_USER`. Must be an alias of the Gmail account or Gmail will rewrite it. |
 | `EMAIL_TO` | same | Recipient(s), comma-separated |
-| `NOTIFY_ON_EMPTY` | same (or repo **variable** for GitHub) | `true` to send a "nothing today" email on quiet days. Recommended early season. |
-| `ENTRIES_WINDOW_DAYS` | same | Default 5. Forward window for the "Entered" section. |
+| `NOTIFY_ON_EMPTY` | same (or repo **variable** for GitHub) | `true` to send a morning "nothing today" email on quiet days. The evening results email always sends regardless of this setting. |
+| `ENTRIES_WINDOW_DAYS` | same | Default 3. Forward window for the morning "Entries & declarations" section. |
 
 ## Project layout
 
@@ -162,7 +181,7 @@ src/dailybreezeup/
   templates/
     email.html.j2 email.txt.j2
 .github/workflows/
-  daily.yml             # 07:00 UK cron
+  daily.yml             # 07:00 (morning) and 21:00 (evening) UTC cron
 data/
   breezeup.sqlite       # committed — run_log + email_log for dedup
 tests/

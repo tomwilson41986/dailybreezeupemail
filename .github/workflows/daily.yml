@@ -1,12 +1,10 @@
 name: daily-breezeup-email
 
 # Two scheduled runs per day plus manual dispatch:
-#   07:00 UTC - "morning" run, surfaces lots entered to run in the next 5 days
-#   21:00 UTC - "results" run, surfaces lots that ran today
-# Each run writes to email_log so the same row isn't sent twice in one day;
-# the 21:00 email naturally focuses on results because the morning's entries
-# were already logged. notify_on_empty defaults to false in CI, so a quiet
-# day produces no email.
+#   07:00 UTC - morning run (--mode morning): entries & declarations in the
+#               next 3 days. Suppressed when empty unless notify_on_empty=true.
+#   21:00 UTC - evening run (--mode evening): results that ran today. Always
+#               sends, even on a quiet day (subject: "No Results Today").
 #
 # 28 Apr 2026: the previous cron attempt failed because the default
 # `requests` library exposes a Python TLS fingerprint that Racing Post's
@@ -33,8 +31,14 @@ on:
         description: "Skip live RP fetch; render with hardcoded Craven 2026 lots"
         required: false
         default: "false"
+      mode:
+        description: "morning (entries) or evening (results). Blank = pick from time of day."
+        required: false
+        type: choice
+        options: ["", "morning", "evening"]
+        default: ""
       entries_window_days:
-        description: "Override forward window (days). Blank = use repo default (5)."
+        description: "Override forward window (days). Blank = use repo default (3)."
         required: false
       notify_on_empty:
         description: "Send 'no horses today' email if total=0. Blank = use repo default. Type 'true' or 'false'."
@@ -57,7 +61,13 @@ jobs:
       ENTRIES_WINDOW_DAYS: >-
         ${{ github.event.inputs.entries_window_days
             || vars.ENTRIES_WINDOW_DAYS
-            || '5' }}
+            || '3' }}
+      # Schedule cron's `schedule` event has no inputs, so derive mode from
+      # the cron expression. workflow_dispatch can override via the input.
+      RUN_MODE: >-
+        ${{ github.event.inputs.mode
+            || (github.event.schedule == '0 21 * * *' && 'evening')
+            || 'morning' }}
       # Lets a fork/repo-variable point at a different sheet without code changes.
       SHEET_CSV_URL: ${{ vars.SHEET_CSV_URL }}
 
@@ -74,7 +84,7 @@ jobs:
 
       - name: Run daily job
         run: |
-          args=""
+          args="--mode ${RUN_MODE}"
           if [ -n "${{ github.event.inputs.date }}" ]; then args="$args --date ${{ github.event.inputs.date }}"; fi
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then args="$args --dry-run"; fi
           if [ "${{ github.event.inputs.demo }}" = "true" ]; then args="$args --demo"; fi
@@ -89,6 +99,7 @@ jobs:
             echo "- date: \`${{ github.event.inputs.date || 'today UK' }}\`"
             echo "- dry_run: \`${{ github.event.inputs.dry_run || 'false' }}\`"
             echo "- demo: \`${{ github.event.inputs.demo || 'false' }}\`"
+            echo "- mode: \`${RUN_MODE}\`"
             echo "- entries_window_days: \`${ENTRIES_WINDOW_DAYS}\`"
             echo "- notify_on_empty: \`${NOTIFY_ON_EMPTY}\`"
             if [ -f data/last_preview.txt ]; then
