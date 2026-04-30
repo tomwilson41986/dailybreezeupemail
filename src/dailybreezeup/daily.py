@@ -1,8 +1,12 @@
-"""Daily job: pull every current breeze-up catalogue from Racing Post, flag
-any lot entered to run in the next 5 days, and any lot that ran today.
+"""Daily job: pull every current breeze-up catalogue from Racing Post.
+
+Two modes, one per scheduled run:
+  morning  - lots entered to run in the next 3 days (entries + declarations)
+  evening  - lots that ran today (results); always sent, even when empty
 
 Usage:
-  breezeup-daily                      # today UK, send
+  breezeup-daily --mode morning       # today UK, send entries email
+  breezeup-daily --mode evening       # today UK, send results email
   breezeup-daily --dry-run            # render preview, no send
   breezeup-daily --date 2026-04-24    # force a date
 """
@@ -216,15 +220,28 @@ def _write_preview(payload: EmailPayload) -> None:
     PREVIEW_TXT.write_text(payload.text, encoding="utf-8")
 
 
+def _default_mode(now: datetime | None = None) -> str:
+    """Pick morning vs evening based on UK local hour when --mode isn't given.
+
+    The schedulers (Task Scheduler, GitHub Actions) pass --mode explicitly, so
+    this is only a sensible fallback for ad-hoc CLI runs."""
+    now = now or datetime.now(UK)
+    return "morning" if now.hour < 14 else "evening"
+
+
 def run(
     *,
     run_date: date | None = None,
     dry_run: bool = False,
     no_send: bool = False,
     demo: bool = False,
+    mode: str | None = None,
 ) -> int:
     settings: Settings = load_settings()
     today = run_date or datetime.now(UK).date()
+    mode = mode or _default_mode()
+    if mode not in ("morning", "evening"):
+        raise ValueError(f"mode must be 'morning' or 'evening', got {mode!r}")
 
     with session(settings.db_path) as conn:
         conn.execute(
@@ -235,7 +252,10 @@ def run(
 
         all_lots: list[rp_sales.SaleLot]
         hits: list[rp_results.ResultHit] = []
-        diagnostics: dict[str, Any] = {"mode": "demo" if demo else "live"}
+        diagnostics: dict[str, Any] = {
+            "run_kind": "demo" if demo else "live",
+            "mode": mode,
+        }
         if demo:
             log.warning("DEMO MODE: using static fixture lots, no live RP fetch")
             all_lots = rp_sales.demo_lots()
@@ -258,12 +278,15 @@ def run(
             diagnostics["lots_total"] = len(all_lots)
             diagnostics["lots_entered_any_date"] = sum(1 for lot in all_lots if lot.entered)
 
-            uids = {lot.horse_uid for lot in all_lots if lot.horse_uid is not None}
-            log.info("Horse uids across all catalogues: %d", len(uids))
-            if uids:
-                hits = rp_results.fetch_hits_for_uids(today, uids)
-                log.info("Result hits for today: %d", len(hits))
-            diagnostics["result_hits"] = len(hits)
+            if mode == "evening":
+                uids = {lot.horse_uid for lot in all_lots if lot.horse_uid is not None}
+                log.info("Horse uids across all catalogues: %d", len(uids))
+                if uids:
+                    hits = rp_results.fetch_hits_for_uids(today, uids)
+                    log.info("Result hits for today: %d", len(hits))
+                diagnostics["result_hits"] = len(hits)
+            else:
+                log.info("morning mode: skipping results fetch")
 
         entries_window_days = settings.entries_window_days
         if demo:
@@ -277,6 +300,13 @@ def run(
             entries_window_days=entries_window_days,
         )
         log.info("entries window: today..+%d days", entries_window_days)
+
+        # The two emails own disjoint sections: the morning email is for
+        # entries/declarations only, the evening email is for results only.
+        if mode == "morning":
+            ran = []
+        elif mode == "evening":
+            entered = []
 
         sheet_status: str
         try:
@@ -329,20 +359,25 @@ def run(
             ran_today=ran,
             entries_window_days=entries_window_days,
             diagnostics=diagnostics,
+            mode=mode,
         )
         _write_preview(payload)
 
         total = len(entered) + len(ran)
         summary = {
             "demo": demo,
+            "mode": mode,
             "lots": len(all_lots),
             "entered_in_window": len(entered),
             "ran_today": len(ran),
         }
         log.info("summary: %s", summary)
 
+        # Evening always sends — even an empty results day still gets a
+        # "No Results Today" notice. Morning falls back to notify_on_empty.
+        send_when_empty = mode == "evening" or settings.notify_on_empty
         will_send = not (dry_run or no_send)
-        if will_send and (total > 0 or settings.notify_on_empty):
+        if will_send and (total > 0 or send_when_empty):
             try:
                 send(payload, settings)
                 _log_send(conn, today, entered, ran)
@@ -371,6 +406,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-send", action="store_true", help="Alias for --dry-run")
     ap.add_argument("--demo", action="store_true",
                     help="Skip live RP fetch; render with the four real Craven 2026 entered lots")
+    ap.add_argument("--mode", choices=("morning", "evening"), default=None,
+                    help="morning = entries/declarations only; evening = results only "
+                         "(default: morning before 14:00 UK, evening after)")
     ap.add_argument("-v", "--verbose", action="count", default=0)
     args = ap.parse_args(argv)
 
@@ -380,6 +418,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     return run(
         run_date=args.date, dry_run=args.dry_run, no_send=args.no_send, demo=args.demo,
+        mode=args.mode,
     )
 
 

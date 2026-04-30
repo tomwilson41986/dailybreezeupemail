@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     email_to: str = ""
 
     notify_on_empty: bool = False
-    entries_window_days: int = 5
+    entries_window_days: int = 3
     db_path: Path = Field(default=Path("data/breezeup.sqlite"))
 
     sheet_csv_url: str = DEFAULT_SHEET_CSV_URL

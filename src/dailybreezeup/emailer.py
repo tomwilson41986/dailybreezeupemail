@@ -107,6 +107,7 @@ def _render_text(
     entries_window_days: int,
     total: int,
     diagnostics: dict[str, Any],
+    mode: str,
 ) -> str:
     plural = "" if total == 1 else "s"
     parts: list[str] = [
@@ -114,29 +115,34 @@ def _render_text(
         f"{total} horse{plural}",
         "",
     ]
-    if ran_today:
-        parts.append(f"═══ RAN TODAY · {len(ran_today)} ═══")
-        for row in ran_today:
-            parts.extend(_fmt_card(row, ran=True))
-            parts.append("")
-    if entered:
-        win_plural = "" if entries_window_days == 1 else "S"
-        parts.append(
-            f"═══ ENTERED IN NEXT {entries_window_days} DAY{win_plural} · {len(entered)} ═══"
-        )
-        for row in entered:
-            parts.extend(_fmt_card(row, ran=False))
-            parts.append("")
-    if total == 0:
-        parts.append(
-            f"No breeze-up graduates ran today and none are entered in the next "
-            f"{entries_window_days} day{'' if entries_window_days == 1 else 's'}."
-        )
-        if diagnostics:
-            parts.append("")
-            parts.append("---- Run diagnostics ----")
-            for k, v in diagnostics.items():
-                parts.append(f"{k}: {v}")
+    if mode == "evening":
+        if ran_today:
+            parts.append(f"═══ RAN TODAY · {len(ran_today)} ═══")
+            for row in ran_today:
+                parts.extend(_fmt_card(row, ran=True))
+                parts.append("")
+        else:
+            parts.append("No Results Today")
+    else:  # morning
+        if entered:
+            win_plural = "" if entries_window_days == 1 else "S"
+            parts.append(
+                f"═══ ENTRIES & DECLARATIONS · NEXT {entries_window_days} DAY{win_plural} "
+                f"· {len(entered)} ═══"
+            )
+            for row in entered:
+                parts.extend(_fmt_card(row, ran=False))
+                parts.append("")
+        else:
+            parts.append(
+                f"No breeze-up graduates entered in the next "
+                f"{entries_window_days} day{'' if entries_window_days == 1 else 's'}."
+            )
+    if total == 0 and diagnostics:
+        parts.append("")
+        parts.append("---- Run diagnostics ----")
+        for k, v in diagnostics.items():
+            parts.append(f"{k}: {v}")
     sheet_status = diagnostics.get("sheet_status")
     if sheet_status and total > 0:
         parts.append("")
@@ -149,16 +155,29 @@ def render(
     run_date: date,
     entered: list[dict[str, Any]],
     ran_today: list[dict[str, Any]],
-    entries_window_days: int = 5,
+    entries_window_days: int = 3,
     diagnostics: dict[str, Any] | None = None,
+    mode: str = "morning",
 ) -> EmailPayload:
     diagnostics = diagnostics or {}
+    if mode not in ("morning", "evening"):
+        raise ValueError(f"mode must be 'morning' or 'evening', got {mode!r}")
     env = _env()
-    total = len(entered) + len(ran_today)
-    subject = (
-        f"Breeze-up graduates — {run_date:%a %d %b %Y} "
-        f"({total} horse{'' if total == 1 else 's'})"
-    )
+    # Each mode owns one section; the other list is ignored even if populated.
+    total = len(ran_today) if mode == "evening" else len(entered)
+    if mode == "evening":
+        if total == 0:
+            subject = f"Breeze-up results — {run_date:%a %d %b %Y} · No Results Today"
+        else:
+            subject = (
+                f"Breeze-up results — {run_date:%a %d %b %Y} "
+                f"({total} horse{'' if total == 1 else 's'})"
+            )
+    else:
+        subject = (
+            f"Breeze-up entries — {run_date:%a %d %b %Y} "
+            f"({total} horse{'' if total == 1 else 's'})"
+        )
     context = {
         "run_date": run_date,
         "total": total,
@@ -167,6 +186,7 @@ def render(
         "entries_window_days": entries_window_days,
         "subject": subject,
         "diagnostics": diagnostics,
+        "mode": mode,
     }
     html = env.get_template("email.html.j2").render(**context)
     text = _render_text(
@@ -176,6 +196,7 @@ def render(
         entries_window_days=entries_window_days,
         total=total,
         diagnostics=diagnostics,
+        mode=mode,
     )
     return EmailPayload(subject=subject, html=html, text=text)
 

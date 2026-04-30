@@ -40,36 +40,67 @@ def _ran_row(**over):
     return base
 
 
-def test_render_shows_entered_and_ran_sections():
+def test_morning_renders_entries_only():
     p = render(
         run_date=date(2026, 4, 24),
         entered=[_entered_row()],
-        ran_today=[_ran_row(horse_name="Named Runner")],
+        ran_today=[_ran_row(horse_name="Named Runner")],  # ignored in morning mode
+        mode="morning",
     )
-    assert "Ran today" in p.html and "&middot; 1" in p.html
-    assert "Entered in the next 5 days" in p.html
+    assert "Entries &amp; declarations" in p.html
+    assert "next 3 days" in p.html
     assert "Havana Grey" in p.html
-    assert "Named Runner" in p.html
     assert "Lot 16 (unnamed)" in p.html
-    assert "2 horses" in p.subject
+    assert "Ran today" not in p.html
+    assert "Named Runner" not in p.html
+    assert p.subject.startswith("Breeze-up entries")
 
 
-def test_render_window_label_reflects_setting():
+def test_evening_renders_results_only():
+    p = render(
+        run_date=date(2026, 4, 24),
+        entered=[_entered_row()],  # ignored in evening mode
+        ran_today=[_ran_row(horse_name="Named Runner")],
+        mode="evening",
+    )
+    assert "Ran today" in p.html
+    assert "Named Runner" in p.html
+    assert "Entries" not in p.html
+    assert p.subject.startswith("Breeze-up results")
+    assert "1 horse" in p.subject
+
+
+def test_evening_no_results_shows_placeholder():
+    p = render(
+        run_date=date(2026, 4, 24),
+        entered=[],
+        ran_today=[],
+        mode="evening",
+    )
+    assert "No Results Today" in p.html
+    assert "No Results Today" in p.subject
+    assert "No Results Today" in p.text
+
+
+def test_morning_window_label_reflects_setting():
     p = render(
         run_date=date(2026, 4, 24),
         entered=[_entered_row()],
         ran_today=[],
         entries_window_days=9999,
+        mode="morning",
     )
-    assert "Entered in the next 9999 days" in p.html
-    assert "ENTERED IN NEXT 9999 DAYS" in p.text
+    assert "next 9999 days" in p.html
+    assert "NEXT 9999 DAYS" in p.text
 
 
-def test_render_empty_case():
-    p = render(run_date=date(2026, 4, 24), entered=[], ran_today=[])
+def test_morning_empty_case():
+    p = render(
+        run_date=date(2026, 4, 24), entered=[], ran_today=[], mode="morning",
+    )
     assert "0 horses" in p.subject
-    assert "No breeze-up graduates ran today" in p.html
-    assert "next 5 days" in p.html  # default window when not specified
+    assert "No breeze-up graduates entered" in p.html
+    assert "next 3 days" in p.html  # default window when not specified
 
 
 def test_render_empty_case_includes_diagnostics():
@@ -77,17 +108,20 @@ def test_render_empty_case_includes_diagnostics():
         run_date=date(2026, 4, 24),
         entered=[],
         ran_today=[],
-        diagnostics={"mode": "live", "sales_found": 0, "dedup_dropped_entered": 3},
+        diagnostics={"run_kind": "live", "sales_found": 0, "dedup_dropped_entered": 3},
+        mode="morning",
     )
     assert "Run diagnostics" in p.html
     assert "sales_found" in p.html
     assert "dedup_dropped_entered" in p.text
-    assert "mode: live" in p.text
+    assert "run_kind: live" in p.text
 
 
 def test_render_links_race_urls_in_html():
     row = _ran_row()
-    p = render(run_date=date(2026, 4, 24), entered=[], ran_today=[row])
+    p = render(
+        run_date=date(2026, 4, 24), entered=[], ran_today=[row], mode="evening",
+    )
     assert row["race_url"] in p.html
 
 
@@ -96,6 +130,13 @@ def test_text_variant_is_plain():
         run_date=date(2026, 4, 24),
         entered=[_entered_row()],
         ran_today=[],
+        mode="morning",
     )
-    assert "ENTERED IN NEXT 5 DAYS" in p.text
+    assert "ENTRIES & DECLARATIONS" in p.text
     assert "Havana Grey" in p.text
+
+
+def test_invalid_mode_rejected():
+    import pytest
+    with pytest.raises(ValueError):
+        render(run_date=date(2026, 4, 24), entered=[], ran_today=[], mode="midday")
