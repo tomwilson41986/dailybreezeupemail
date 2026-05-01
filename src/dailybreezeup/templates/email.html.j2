@@ -58,6 +58,7 @@
       {%- set dam = row.sheet_dam or row.dam -%}
       {%- set price = row.sheet_price or row.price -%}
       {%- set buyer = row.sheet_buyer or row.buyer -%}
+      {%- set vendor = row.sheet_vendor or row.seller -%}
       {%- set short_sale = (row.sale_short ~ " " ~ row.sale_year) if row.sale_short else row.sale_name -%}
       <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fff;border:1px solid #e3e3de;border-radius:8px;margin-bottom:12px;">
         {#- ─ row 1: identity + rating tile ─ -#}
@@ -126,13 +127,15 @@
         </tr>
         {%- endif %}
         {#- ─ row 4: commercial line ─ -#}
-        {%- if price or buyer %}
+        {%- if price or buyer or vendor %}
         <tr>
           <td colspan="2" style="padding:6px 16px 14px;">
             <div style="font-size:12px;color:#666;">
               {%- if price %}<span style="color:#1a1a1a;font-weight:600;">{{ price }}</span>{% endif -%}
-              {%- if price and buyer %} &middot; {% endif -%}
+              {%- if price and (buyer or vendor) %} &middot; {% endif -%}
               {%- if buyer %}{{ buyer }}{% endif -%}
+              {%- if buyer and vendor %} &middot; {% endif -%}
+              {%- if vendor %}<span style="color:#888;">{{ vendor }}</span>{% endif -%}
             </div>
           </td>
         </tr>

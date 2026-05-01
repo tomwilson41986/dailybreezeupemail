@@ -39,6 +39,7 @@ def _fmt_card(row: dict[str, Any], *, ran: bool) -> list[str]:
     damsire = row.get("damsire") or ""
     price = row.get("sheet_price") or row.get("price") or ""
     buyer = row.get("sheet_buyer") or row.get("buyer") or ""
+    vendor = row.get("sheet_vendor") or row.get("seller") or ""
     short_sale = (
         f"{row['sale_short']} {row['sale_year']}"
         if row.get("sale_short")
@@ -91,8 +92,8 @@ def _fmt_card(row: dict[str, Any], *, ran: bool) -> list[str]:
             )
             lines.append(f"    {ot_part}  ·  {sl_part}")
 
-    if price or buyer:
-        commercial = " · ".join(p for p in (price, buyer) if p)
+    if price or buyer or vendor:
+        commercial = " · ".join(p for p in (price, buyer, vendor) if p)
         lines.append(f"    {commercial}")
 
     lines.append(f"    {row['race_url']}")
