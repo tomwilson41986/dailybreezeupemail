@@ -26,7 +26,7 @@ from zoneinfo import ZoneInfo
 from dailybreezeup.config import Settings, load as load_settings
 from dailybreezeup.db import session
 from dailybreezeup.emailer import EmailPayload, render, send
-from dailybreezeup.racing import rp_results, rp_sales
+from dailybreezeup.racing import rp_racecards, rp_results, rp_sales
 from dailybreezeup import sheet as sheet_mod
 
 log = logging.getLogger("dailybreezeup.daily")
@@ -100,25 +100,61 @@ def _ran_row(lot: rp_sales.SaleLot, hit: rp_results.ResultHit) -> dict[str, Any]
     return base
 
 
+def _entered_row_from_racecard(
+    lot: rp_sales.SaleLot, entry: rp_racecards.RacecardEntry
+) -> dict[str, Any]:
+    base = _lot_row(lot, race_uid=entry.race_uid)
+    base.update({
+        "course": entry.course,
+        "race_date": entry.race_date,
+        "off_time": entry.off_time,
+        "race_name": entry.race_name,
+        "race_url": entry.race_url,
+        "horse_name": entry.horse_name or lot.horse_name,
+    })
+    return base
+
+
 def _classify(
     today: date,
     lots: list[rp_sales.SaleLot],
     results: list[rp_results.ResultHit],
+    racecard_entries: list[rp_racecards.RacecardEntry] | None = None,
     *,
     entries_window_days: int,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     window_end = today + timedelta(days=entries_window_days)
+    by_uid: dict[int, rp_sales.SaleLot] = {
+        lot.horse_uid: lot for lot in lots if lot.horse_uid is not None
+    }
+
     entered: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def _push(row: dict[str, Any]) -> None:
+        key = (row["lot_id"], row.get("race_uid") or "")
+        if key in seen:
+            return
+        seen.add(key)
+        entered.append(row)
+
     for lot in lots:
         if not (lot.entered and lot.entry):
             continue
         if not (today <= lot.entry.race_date <= window_end):
             continue
-        entered.append(_entered_row(lot))
+        _push(_entered_row(lot))
 
-    by_uid: dict[int, rp_sales.SaleLot] = {
-        lot.horse_uid: lot for lot in lots if lot.horse_uid is not None
-    }
+    # Racecard-side join: covers lots whose catalogue entry_details points
+    # at a different (often later) race than today's, or is missing entirely.
+    for rc in racecard_entries or []:
+        if not (today <= rc.race_date <= window_end):
+            continue
+        lot = by_uid.get(rc.horse_uid)
+        if lot is None:
+            continue
+        _push(_entered_row_from_racecard(lot, rc))
+
     ran: list[dict[str, Any]] = []
     for hit in results:
         lot = by_uid.get(hit.horse_uid)
@@ -252,6 +288,7 @@ def run(
 
         all_lots: list[rp_sales.SaleLot]
         hits: list[rp_results.ResultHit] = []
+        racecard_entries: list[rp_racecards.RacecardEntry] = []
         diagnostics: dict[str, Any] = {
             "run_kind": "demo" if demo else "live",
             "mode": mode,
@@ -287,6 +324,15 @@ def run(
                 diagnostics["result_hits"] = len(hits)
             else:
                 log.info("morning mode: skipping results fetch")
+                uids = {lot.horse_uid for lot in all_lots if lot.horse_uid is not None}
+                log.info("Horse uids across all catalogues: %d", len(uids))
+                if uids:
+                    for offset in range(settings.entries_window_days + 1):
+                        on = today + timedelta(days=offset)
+                        day_entries = rp_racecards.fetch_entries_for_uids(on, uids)
+                        log.info("Racecard hits for %s: %d", on, len(day_entries))
+                        racecard_entries.extend(day_entries)
+                diagnostics["racecard_hits"] = len(racecard_entries)
 
         entries_window_days = settings.entries_window_days
         if demo:
@@ -296,7 +342,7 @@ def run(
             entries_window_days = 9999
 
         entered, ran = _classify(
-            today, all_lots, hits,
+            today, all_lots, hits, racecard_entries,
             entries_window_days=entries_window_days,
         )
         log.info("entries window: today..+%d days", entries_window_days)
