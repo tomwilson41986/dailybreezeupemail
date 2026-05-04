@@ -73,6 +73,7 @@ def test_parse_racecard_page_entries_matches_target_uid():
     assert "Tattersalls" in h.race_name or "Novice" in h.race_name
     assert h.course == "Newmarket"
     assert h.race_uid == "916544"
+    assert h.silk_url == "https://www.rp-assets.com/svg/d/1/5/361251d.svg"
 
 
 def test_parse_racecard_page_entries_does_not_false_match_pedigree_links():

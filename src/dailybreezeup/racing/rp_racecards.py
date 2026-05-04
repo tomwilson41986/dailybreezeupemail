@@ -72,6 +72,7 @@ class RacecardEntry:
     race_name: str
     race_url: str
     race_uid: str
+    silk_url: str | None
 
 
 def _course_display(slug: str) -> str:
@@ -166,6 +167,8 @@ def parse_racecard_page_entries(
                 break
         name_el = row.xpath('.//*[contains(@class,"RC-runnerName")]')
         horse_name = " ".join(name_el[0].text_content().split()) if name_el else ""
+        silk_src = row.xpath('.//img[contains(@class,"RC-runnerJacket__image")]/@src')
+        silk_url = silk_src[0] if silk_src else None
         hits.append(
             RacecardEntry(
                 horse_uid=uid,
@@ -178,6 +181,7 @@ def parse_racecard_page_entries(
                 race_name=race_name,
                 race_url=race_url,
                 race_uid=race_uid,
+                silk_url=silk_url,
             )
         )
     return hits

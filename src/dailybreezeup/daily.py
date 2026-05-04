@@ -96,6 +96,7 @@ def _ran_row(lot: rp_sales.SaleLot, hit: rp_results.ResultHit) -> dict[str, Any]
         "sp": hit.sp,
         "race_url": hit.race_url,
         "horse_name": hit.horse_name or lot.horse_name,
+        "silk_url": hit.silk_url,
     })
     return base
 
@@ -111,6 +112,7 @@ def _entered_row_from_racecard(
         "race_name": entry.race_name,
         "race_url": entry.race_url,
         "horse_name": entry.horse_name or lot.horse_name,
+        "silk_url": entry.silk_url,
     })
     return base
 
@@ -138,15 +140,11 @@ def _classify(
         seen.add(key)
         entered.append(row)
 
-    for lot in lots:
-        if not (lot.entered and lot.entry):
-            continue
-        if not (today <= lot.entry.race_date <= window_end):
-            continue
-        _push(_entered_row(lot))
-
-    # Racecard-side join: covers lots whose catalogue entry_details points
-    # at a different (often later) race than today's, or is missing entirely.
+    # Racecard-side join first — it carries silk URLs and live race metadata
+    # (off_time, race_name) that the catalogue's entry_details omits, and
+    # also covers lots whose entry_details points at a different (often
+    # later) race or is missing. Catalogue-derived rows below act as a
+    # fallback for lots not seen via racecards.
     for rc in racecard_entries or []:
         if not (today <= rc.race_date <= window_end):
             continue
@@ -154,6 +152,13 @@ def _classify(
         if lot is None:
             continue
         _push(_entered_row_from_racecard(lot, rc))
+
+    for lot in lots:
+        if not (lot.entered and lot.entry):
+            continue
+        if not (today <= lot.entry.race_date <= window_end):
+            continue
+        _push(_entered_row(lot))
 
     ran: list[dict[str, Any]] = []
     for hit in results:
@@ -425,7 +430,7 @@ def run(
         will_send = not (dry_run or no_send)
         if will_send and (total > 0 or send_when_empty):
             try:
-                send(payload, settings)
+                send(payload, settings, silk_rows=entered + ran)
                 _log_send(conn, today, entered, ran)
                 status = "ok"
             except Exception as exc:  # noqa: BLE001

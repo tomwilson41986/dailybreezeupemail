@@ -10,6 +10,7 @@ from typing import Any
 
 from jinja2 import Environment, PackageLoader, select_autoescape
 
+from dailybreezeup import silks
 from dailybreezeup.config import Settings
 
 log = logging.getLogger(__name__)
@@ -163,6 +164,8 @@ def render(
     diagnostics = diagnostics or {}
     if mode not in ("morning", "evening"):
         raise ValueError(f"mode must be 'morning' or 'evening', got {mode!r}")
+    silks.assign_silk_cids(entered)
+    silks.assign_silk_cids(ran_today)
     env = _env()
     # Each mode owns one section; the other list is ignored even if populated.
     total = len(ran_today) if mode == "evening" else len(entered)
@@ -214,7 +217,12 @@ def _build_message(payload: EmailPayload, sender: str, recipients: list[str]) ->
     return msg
 
 
-def send(payload: EmailPayload, settings: Settings) -> None:
+def send(
+    payload: EmailPayload,
+    settings: Settings,
+    *,
+    silk_rows: list[dict[str, Any]] | None = None,
+) -> None:
     if not settings.gmail_user or not settings.gmail_app_password:
         raise RuntimeError("GMAIL_USER and GMAIL_APP_PASSWORD must be set")
     recipients = settings.email_to_list
@@ -223,6 +231,10 @@ def send(payload: EmailPayload, settings: Settings) -> None:
 
     sender = settings.email_from or settings.gmail_user
     msg = _build_message(payload, sender, recipients)
+    if silk_rows:
+        attached = silks.attach_silks(msg, silk_rows)
+        if attached:
+            log.info("attached %d silk image(s) inline", attached)
 
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
         smtp.ehlo()

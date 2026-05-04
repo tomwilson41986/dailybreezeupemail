@@ -69,6 +69,7 @@ class ResultHit:
     sp: str | None
     race_url: str
     race_uid: str
+    silk_url: str | None
 
 
 def _course_display(slug: str) -> str:
@@ -144,6 +145,8 @@ def parse_result_page_hits(
         pos = pos_el[0].strip().split()[0] if pos_el and pos_el[0].strip() else None
         sp_el = row.xpath('.//*[contains(@class,"rp-horseTable__horse__price")]/text()')
         sp = " ".join("".join(sp_el).split()) or None
+        silk_src = row.xpath('.//img[contains(@class,"rp-horseTable__silk")]/@src')
+        silk_url = silk_src[0] if silk_src else None
 
         hits.append(
             ResultHit(
@@ -158,6 +161,7 @@ def parse_result_page_hits(
                 sp=sp,
                 race_url=race_url,
                 race_uid=race_uid,
+                silk_url=silk_url,
             )
         )
     return hits
