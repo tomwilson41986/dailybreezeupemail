@@ -8,6 +8,15 @@ DEFAULT_SHEET_CSV_URL = (
     "12neJo7BsCsHg20m-es5ERkLJCevUzXyMDnvV9-ygrMk/export?format=csv"
 )
 
+# Recipients that always receive every email regardless of the configured
+# EMAIL_TO env var. Merged with EMAIL_TO at send time, deduped case-
+# insensitively, in this order followed by the env-configured addresses.
+_ALWAYS_RECIPIENTS: tuple[str, ...] = (
+    "stuart@blandfordbloodstock.com",
+    "richard@blandfordbloodstock.com",
+    "tom.biggs@blandfordbloodstock.com",
+)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -38,7 +47,16 @@ class Settings(BaseSettings):
 
     @property
     def email_to_list(self) -> list[str]:
-        return [x.strip() for x in self.email_to.split(",") if x.strip()]
+        configured = [x.strip() for x in self.email_to.split(",") if x.strip()]
+        merged: list[str] = []
+        seen: set[str] = set()
+        for addr in (*_ALWAYS_RECIPIENTS, *configured):
+            key = addr.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(addr)
+        return merged
 
 
 def load() -> Settings:
