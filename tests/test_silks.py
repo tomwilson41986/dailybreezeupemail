@@ -1,13 +1,18 @@
-"""Unit tests for the silks module — CID derivation and message attachment.
-
-Live cairosvg/network calls are stubbed: we exercise the wiring without
-hitting Racing Post or requiring the cairo C library to be installed.
-"""
+"""Unit tests for the silks module — CID derivation, SVG sanitisation,
+and message attachment. Live network calls are stubbed; the renderer
+integration test (test_svg_to_png_renders_real_silk_fixture) is gated on
+resvg_py being importable so it skips cleanly when the wheel isn't
+available."""
 from __future__ import annotations
 
 from email.message import EmailMessage
+from pathlib import Path
+
+import pytest
 
 from dailybreezeup import silks
+
+FIX = Path(__file__).parent / "fixtures" / "racingpost"
 
 
 def test_cid_for_url_is_deterministic_and_url_safe():
@@ -90,3 +95,29 @@ def test_attach_silks_skips_failed_fetch(monkeypatch):
     rows = [{"silk_url": "https://x/a.svg"}]
     monkeypatch.setattr(silks, "_fetch_svg", lambda url, session=None: None)
     assert silks.attach_silks(msg, rows) == 0
+
+
+def test_sanitise_svg_strips_pt_suffixed_dims():
+    raw = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" width="98.45pt" '
+        b'height="70.53pt" viewBox="0 0 98.45 70.53"></svg>'
+    )
+    out = silks._sanitise_svg(raw)
+    assert 'pt"' not in out
+    assert 'viewBox="0 0 98.45 70.53"' in out
+
+
+def test_svg_to_png_renders_real_silk_fixture():
+    """Integration test: actually rasterise a captured RP silk via resvg-py.
+
+    This is the single test that would have caught the production bug —
+    the unit tests all stub the renderer, so swapping cairosvg → resvg
+    only leaves the failure mode in this path. Skipped if resvg-py isn't
+    importable so unrelated dev environments stay green.
+    """
+    pytest.importorskip("resvg_py")
+    svg = (FIX / "silk_efsixteen.svg").read_bytes()
+    png = silks._svg_to_png(svg)
+    assert png is not None
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    assert len(png) > 200

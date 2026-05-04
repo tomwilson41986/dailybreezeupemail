@@ -6,14 +6,17 @@ recipient) blocks remote SVG and most email clients sanitise <img src>
 to disk-cached versions. CID-attached PNG is the only path that renders
 reliably across Gmail web/iOS, Apple Mail and Outlook.
 
-cairosvg + cairocffi are imported lazily so the daily pipeline still runs
-on machines that haven't installed the cairo C library — silks just get
-skipped with a warning.
+We render with resvg-py rather than cairosvg because cairosvg requires
+the Cairo C library to be installed system-wide — a known pain on
+Windows, where the production cron lives. resvg-py ships statically
+linked binary wheels for every platform we target, so a plain
+``pip install`` is enough.
 """
 from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from dataclasses import dataclass
 from email.message import EmailMessage
 from typing import Any, Iterable
@@ -28,6 +31,12 @@ _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 )
+
+# Racing Post silks declare width/height in points (e.g. width="98.45pt").
+# resvg 0.3 rejects unit-suffixed dims with "SVG has an invalid size";
+# stripping those attributes lets resvg fall back to viewBox + the explicit
+# render-time width/height we pass in.
+_PT_DIM_RE = re.compile(r'\s(width|height)="[\d\.]+pt"')
 
 
 @dataclass(frozen=True)
@@ -52,21 +61,30 @@ def _fetch_svg(url: str, *, session: requests.Session | None = None) -> bytes | 
         return None
 
 
+def _sanitise_svg(svg: bytes) -> str:
+    text = svg.decode("utf-8", errors="replace")
+    return _PT_DIM_RE.sub("", text)
+
+
 def _svg_to_png(svg: bytes) -> bytes | None:
     try:
-        import cairosvg  # type: ignore[import-not-found]
+        import resvg_py  # type: ignore[import-not-found]
     except Exception as exc:  # noqa: BLE001
-        log.warning("cairosvg unavailable; skipping silk rasterisation: %s", exc)
+        log.warning(
+            "resvg_py unavailable; skipping silk rasterisation "
+            "(pip install resvg-py): %s", exc,
+        )
         return None
     try:
-        return cairosvg.svg2png(
-            bytestring=svg,
-            output_width=_SILK_PX,
-            output_height=int(_SILK_PX * 1.2),
-            background_color="white",
+        png = resvg_py.svg_to_bytes(
+            svg_string=_sanitise_svg(svg),
+            width=_SILK_PX,
+            height=int(_SILK_PX * 1.2),
+            background="white",
         )
+        return bytes(png)
     except Exception as exc:  # noqa: BLE001
-        log.warning("cairosvg render failed: %s", exc)
+        log.warning("resvg render failed: %s", exc)
         return None
 
 

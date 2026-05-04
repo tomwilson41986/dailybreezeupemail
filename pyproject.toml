@@ -19,8 +19,9 @@ dependencies = [
   "tenacity>=8.4",
   # Silk SVGs are rasterised to white-backed PNG at email send time so
   # Gmail (which strips remote and inline SVG) renders them inline as
-  # CID-attached PNGs. cairosvg uses cairocffi -> the system Cairo lib.
-  "cairosvg>=2.7",
+  # CID-attached PNGs. resvg-py ships statically linked binary wheels
+  # for every platform — no system Cairo dep on Windows.
+  "resvg-py>=0.3",
 ]
 
 [project.optional-dependencies]
