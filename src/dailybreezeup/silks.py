@@ -25,7 +25,11 @@ import requests
 
 log = logging.getLogger(__name__)
 
-_SILK_PX = 80                # rendered width in CSS pixels
+# RP silks are natively ~98pt x 70pt (aspect h/w ≈ 0.72 — wider than tall),
+# so we ask resvg for width only and let it derive height from the viewBox.
+# Render at 2× the display width for crisp downsampling on retina email
+# clients; the HTML img tag pins the actual display size.
+_SILK_RENDER_PX = 160
 _FETCH_TIMEOUT = 15
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -78,8 +82,7 @@ def _svg_to_png(svg: bytes) -> bytes | None:
     try:
         png = resvg_py.svg_to_bytes(
             svg_string=_sanitise_svg(svg),
-            width=_SILK_PX,
-            height=int(_SILK_PX * 1.2),
+            width=_SILK_RENDER_PX,
             background="white",
         )
         return bytes(png)
