@@ -1,11 +1,15 @@
-"""Racing Post results client, scoped to uid-matching.
+"""Racing Post racecards client, scoped to uid-matching.
 
-Given a set of ``horse_uid`` values, fetch today's results index from
-Racing Post, walk each race page, and emit one :class:`ResultHit` per
-matched runner.  No name-based matching: we join on the uid embedded in
-the profile/horse/<uid> anchor, which is authoritative.
+Mirrors rp_results: given a set of ``horse_uid`` values and a date, fetch
+that day's racecards index, walk each race page, and emit one
+:class:`RacecardEntry` per matched runner. The join is by uid embedded in
+each runner row's ``data-ugc-runnerid`` attribute (authoritative).
 
-The parsers are pure so tests can drive them against captured fixtures.
+Why this exists: the bloodstock catalogue's ``entry_details`` field carries
+at most one entry per lot, and is sometimes stale or points at a future
+race instead of an imminent one. For the morning entries email we cannot
+rely on it alone — we must also walk the racecards over the entries
+window and uid-join them against our catalogue lots.
 """
 from __future__ import annotations
 
@@ -14,7 +18,7 @@ import re
 import time as wall
 from dataclasses import dataclass
 from datetime import date, time
-from typing import Iterable, Sequence
+from typing import Iterable
 
 import requests
 from lxml import html as lxml_html
@@ -29,8 +33,6 @@ _USER_AGENT = (
     "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 )
 
-# Match the rp_sales.py header set so both modules look identical to RP's
-# bot filter. See rp_sales.py for rationale.
 _DOC_HEADERS = {
     "User-Agent": _USER_AGENT,
     "Accept": (
@@ -51,22 +53,23 @@ _DOC_HEADERS = {
     "Priority": "u=0, i",
 }
 
-_RESULT_PATH_RE = re.compile(r"/results/\d+/([a-z][a-z0-9-]*)/(\d{4}-\d{2}-\d{2})/(\d+)")
+_RACECARD_PATH_RE = re.compile(
+    r"/racecards/(\d+)/([a-z][a-z0-9-]*)/(\d{4}-\d{2}-\d{2})/(\d+)"
+)
 _PROFILE_RE = re.compile(r"/profile/horse/(\d+)/([a-z0-9-]+)")
 _TIME_RE = re.compile(r"(\d{1,2})[:.](\d{2})")
 
 
 @dataclass(frozen=True)
-class ResultHit:
+class RacecardEntry:
     horse_uid: int
     horse_slug: str
     horse_name: str
+    course_uid: int
     course: str
     race_date: date
     off_time: time | None
     race_name: str
-    finishing_position: str | None
-    sp: str | None
     race_url: str
     race_uid: str
     silk_url: str | None
@@ -76,8 +79,11 @@ def _course_display(slug: str) -> str:
     return " ".join(w.capitalize() for w in slug.split("-"))
 
 
-def _parse_off_time(title: str) -> time | None:
-    m = _TIME_RE.search(title or "")
+def _parse_off_time(s: str) -> time | None:
+    """Parse an off time from a title string or RC-courseHeader__time text.
+    UK racecards use 12h clock without am/pm; 1..10 are PM, 11/12 are AM,
+    matching the rp_results convention."""
+    m = _TIME_RE.search(s or "")
     if not m:
         return None
     hh, mm = int(m.group(1)), int(m.group(2))
@@ -88,77 +94,91 @@ def _parse_off_time(title: str) -> time | None:
     return time(hh, mm)
 
 
-def parse_results_index_race_urls(html_text: str, on: date) -> list[tuple[str, str, str]]:
-    """Return ``[(course_slug, race_uid, race_url), ...]`` for each race on the date."""
-    seen: set[str] = set()
-    out: list[tuple[str, str, str]] = []
-    for m in _RESULT_PATH_RE.finditer(html_text):
-        slug, d_str, race_id = m.groups()
+def parse_racecards_index_race_urls(
+    html_text: str, on: date
+) -> list[tuple[int, str, str, str]]:
+    """Return ``[(course_uid, course_slug, race_uid, race_url), ...]`` for the date."""
+    seen: set[tuple[int, str]] = set()
+    out: list[tuple[int, str, str, str]] = []
+    for m in _RACECARD_PATH_RE.finditer(html_text):
+        course_uid = int(m.group(1))
+        slug = m.group(2)
+        d_str = m.group(3)
+        race_uid = m.group(4)
         if d_str != on.isoformat():
             continue
-        if race_id in seen:
+        key = (course_uid, race_uid)
+        if key in seen:
             continue
-        seen.add(race_id)
-        out.append((slug, race_id, f"{BASE}{m.group(0)}"))
+        seen.add(key)
+        out.append((course_uid, slug, race_uid, f"{BASE}{m.group(0)}"))
     return out
 
 
-def parse_result_page_hits(
+def parse_racecard_page_entries(
     html_text: str,
     *,
     race_url: str,
     race_uid: str,
+    course_uid: int,
     course: str,
     race_date: date,
     target_uids: set[int],
-) -> list[ResultHit]:
-    """Scan a race page for profile/horse/<uid> where uid is in ``target_uids``."""
+) -> list[RacecardEntry]:
+    """Scan a racecard page for runners whose uid is in ``target_uids``.
+
+    Each runner is a node tagged with ``data-ugc-runnerid="<horse_uid>"``.
+    That attribute is the authoritative join key — anchors inside the row
+    also include sire/dam profile links, so we cannot rely on
+    /profile/horse/<uid> matches alone.
+    """
     if not target_uids:
         return []
     doc = lxml_html.fromstring(html_text)
+
     title_nodes = doc.xpath("//title/text()")
     off_time = _parse_off_time(title_nodes[0]) if title_nodes else None
+    if off_time is None:
+        time_nodes = doc.xpath('//*[contains(@class,"RC-courseHeader__time")]/text()')
+        if time_nodes:
+            off_time = _parse_off_time(time_nodes[0])
+
     race_name_nodes = doc.xpath(
-        '//*[contains(@class,"rp-raceTimeCourseName__title")]//text()'
+        '//*[@data-test-selector="RC-header__raceInstanceTitle"]'
     )
-    race_name = " ".join("".join(race_name_nodes).split()) if race_name_nodes else ""
+    race_name = (
+        " ".join(race_name_nodes[0].text_content().split())
+        if race_name_nodes else ""
+    )
 
-    hits: list[ResultHit] = []
-    for row in doc.xpath('//tr[contains(@class,"rp-horseTable__mainRow")]'):
-        anchors = row.xpath('.//a[contains(@href,"/profile/horse/")]/@href')
-        uid_match: tuple[int, str] | None = None
-        for href in anchors:
-            m = _PROFILE_RE.search(href)
-            if not m:
-                continue
-            uid = int(m.group(1))
-            if uid in target_uids:
-                uid_match = (uid, m.group(2))
-                break
-        if uid_match is None:
+    hits: list[RacecardEntry] = []
+    for row in doc.xpath('//*[@data-ugc-runnerid]'):
+        try:
+            uid = int(row.get("data-ugc-runnerid"))
+        except (TypeError, ValueError):
             continue
-
-        uid, slug = uid_match
-        horse_el = row.xpath('.//*[contains(@class,"rp-horseTable__horse__name")]')
-        horse_name = " ".join(horse_el[0].text_content().split()) if horse_el else ""
-        pos_el = row.xpath('.//*[contains(@class,"rp-horseTable__pos__number")]/text()')
-        pos = pos_el[0].strip().split()[0] if pos_el and pos_el[0].strip() else None
-        sp_el = row.xpath('.//*[contains(@class,"rp-horseTable__horse__price")]/text()')
-        sp = " ".join("".join(sp_el).split()) or None
-        silk_src = row.xpath('.//img[contains(@class,"rp-horseTable__silk")]/@src')
+        if uid not in target_uids:
+            continue
+        slug = ""
+        for href in row.xpath('.//a/@href'):
+            m = _PROFILE_RE.search(href)
+            if m and int(m.group(1)) == uid:
+                slug = m.group(2)
+                break
+        name_el = row.xpath('.//*[contains(@class,"RC-runnerName")]')
+        horse_name = " ".join(name_el[0].text_content().split()) if name_el else ""
+        silk_src = row.xpath('.//img[contains(@class,"RC-runnerJacket__image")]/@src')
         silk_url = silk_src[0] if silk_src else None
-
         hits.append(
-            ResultHit(
+            RacecardEntry(
                 horse_uid=uid,
                 horse_slug=slug,
                 horse_name=horse_name,
+                course_uid=course_uid,
                 course=course,
                 race_date=race_date,
                 off_time=off_time,
                 race_name=race_name,
-                finishing_position=pos,
-                sp=sp,
                 race_url=race_url,
                 race_uid=race_uid,
                 silk_url=silk_url,
@@ -189,49 +209,50 @@ def _fetch(session: requests.Session, url: str) -> str:
     return r.text
 
 
-def fetch_hits_for_uids(
+def fetch_entries_for_uids(
     on: date,
     target_uids: Iterable[int],
     *,
     sleep: float = 1.2,
     session: requests.Session | None = None,
-) -> list[ResultHit]:
-    """Scrape today's RP results index and emit hits for any uid we care about."""
-    uids: set[int] = set(int(u) for u in target_uids)
+) -> list[RacecardEntry]:
+    """Scrape RP's racecards index for ``on`` and emit entries for any uid in scope."""
+    uids: set[int] = {int(u) for u in target_uids}
     if not uids:
         return []
     s = session or _make_session()
     try:
-        index_html = _fetch(s, f"{BASE}/results/{on.isoformat()}")
+        index_html = _fetch(s, f"{BASE}/racecards/{on.isoformat()}")
     except Exception as exc:  # noqa: BLE001
-        log.warning("RP results index fetch failed (%s): %s", on, exc)
+        log.warning("RP racecards index fetch failed (%s): %s", on, exc)
         return []
 
-    races = parse_results_index_race_urls(index_html, on)
+    races = parse_racecards_index_race_urls(index_html, on)
     if not races:
-        log.info("RP results: no races on %s", on)
+        log.info("RP racecards: no races on %s", on)
         return []
 
-    hits: list[ResultHit] = []
-    for i, (slug, race_uid, url) in enumerate(races):
+    hits: list[RacecardEntry] = []
+    for i, (course_uid, slug, race_uid, url) in enumerate(races):
         if i:
             wall.sleep(sleep)
         try:
             page = _fetch(s, url)
         except Exception as exc:  # noqa: BLE001
-            log.warning("RP result page fetch failed (%s): %s", url, exc)
+            log.warning("RP racecard fetch failed (%s): %s", url, exc)
             continue
         try:
             hits.extend(
-                parse_result_page_hits(
+                parse_racecard_page_entries(
                     page,
                     race_url=url,
                     race_uid=race_uid,
+                    course_uid=course_uid,
                     course=_course_display(slug),
                     race_date=on,
                     target_uids=uids,
                 )
             )
         except Exception as exc:  # noqa: BLE001
-            log.warning("RP result page parse failed (%s): %s", url, exc)
+            log.warning("RP racecard parse failed (%s): %s", url, exc)
     return hits

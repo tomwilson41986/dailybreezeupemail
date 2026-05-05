@@ -60,10 +60,17 @@
       {%- set buyer = row.sheet_buyer or row.buyer -%}
       {%- set vendor = row.sheet_vendor or row.seller -%}
       {%- set short_sale = (row.sale_short ~ " " ~ row.sale_year) if row.sale_short else row.sale_name -%}
+      {%- set ncols = 3 if row.silk_cid else 2 -%}
       <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fff;border:1px solid #e3e3de;border-radius:8px;margin-bottom:12px;">
-        {#- ─ row 1: identity + rating tile ─ -#}
+        {#- ─ row 1: silk + identity + rating tile ─ -#}
         <tr>
-          <td style="padding:14px 16px 8px;vertical-align:top;">
+          {%- if row.silk_cid %}
+          <td style="padding:14px 0 8px 16px;vertical-align:top;width:64px;">
+            <img src="cid:{{ row.silk_cid }}" alt="silks" width="56" height="68"
+                 style="background:#fff;display:block;border-radius:4px;">
+          </td>
+          {%- endif %}
+          <td style="padding:14px 16px 8px{% if row.silk_cid %} 12px{% endif %};vertical-align:top;">
             <div style="font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">
               Lot {{ row.lot }} &middot; {{ short_sale }}
             </div>
@@ -89,7 +96,7 @@
         </tr>
         {#- ─ row 2: race line ─ -#}
         <tr>
-          <td colspan="2" style="padding:6px 16px 0;">
+          <td colspan="{{ ncols }}" style="padding:6px 16px 0;">
             <div style="font-size:14px;color:#1a1a1a;">
               {%- if ran %}
                 {{ pos_badge(row.finishing_position) }}
@@ -109,7 +116,7 @@
         {#- ─ row 3: stats line ─ -#}
         {%- if row.sheet_matched and (row.sheet_ot_rank is not none or row.sheet_sl_1f is not none or row.sheet_sl_go is not none) %}
         <tr>
-          <td colspan="2" style="padding:8px 16px 0;">
+          <td colspan="{{ ncols }}" style="padding:8px 16px 0;">
             <div style="font-size:12px;color:#666;line-height:1.6;">
               {%- if row.sheet_ot_rank is not none -%}
                 <span style="color:#444;font-weight:600;">OT</span>
@@ -129,7 +136,7 @@
         {#- ─ row 4: commercial line ─ -#}
         {%- if price or buyer or vendor %}
         <tr>
-          <td colspan="2" style="padding:6px 16px 14px;">
+          <td colspan="{{ ncols }}" style="padding:6px 16px 14px;">
             <div style="font-size:12px;color:#666;">
               {%- if price %}<span style="color:#1a1a1a;font-weight:600;">{{ price }}</span>{% endif -%}
               {%- if price and (buyer or vendor) %} &middot; {% endif -%}
@@ -140,7 +147,7 @@
           </td>
         </tr>
         {%- else %}
-        <tr><td colspan="2" style="padding-bottom:14px;"></td></tr>
+        <tr><td colspan="{{ ncols }}" style="padding-bottom:14px;"></td></tr>
         {%- endif %}
       </table>
     {%- endmacro -%}
@@ -158,7 +165,7 @@
         <p style="margin:0;color:#444;font-size:15px;font-weight:600;">No Results Today</p>
         {% if diagnostics %}
         <table cellspacing="0" cellpadding="6" style="border-collapse:collapse;font-size:12px;color:#555;background:#faf7f0;margin-top:14px;border-radius:4px;">
-          <tr><td colspan="2"><strong>Run diagnostics</strong></td></tr>
+          <tr><td colspan="{{ ncols }}"><strong>Run diagnostics</strong></td></tr>
           {% for k, v in diagnostics.items() %}
           <tr><td style="padding-right:12px;">{{ k }}</td><td>{{ v }}</td></tr>
           {% endfor %}
@@ -177,7 +184,7 @@
         <p style="margin:0;color:#444;">No breeze-up graduates entered in the next {{ entries_window_days }} day{{ '' if entries_window_days == 1 else 's' }}.</p>
         {% if diagnostics %}
         <table cellspacing="0" cellpadding="6" style="border-collapse:collapse;font-size:12px;color:#555;background:#faf7f0;margin-top:14px;border-radius:4px;">
-          <tr><td colspan="2"><strong>Run diagnostics</strong></td></tr>
+          <tr><td colspan="{{ ncols }}"><strong>Run diagnostics</strong></td></tr>
           {% for k, v in diagnostics.items() %}
           <tr><td style="padding-right:12px;">{{ k }}</td><td>{{ v }}</td></tr>
           {% endfor %}

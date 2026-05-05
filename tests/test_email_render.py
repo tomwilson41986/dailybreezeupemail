@@ -125,6 +125,25 @@ def test_render_links_race_urls_in_html():
     assert row["race_url"] in p.html
 
 
+def test_render_embeds_silk_cid_when_silk_url_present():
+    row = _ran_row(silk_url="https://www.rp-assets.com/svg/d/1/5/361251d.svg")
+    p = render(
+        run_date=date(2026, 4, 24), entered=[], ran_today=[row], mode="evening",
+    )
+    # render() assigns row["silk_cid"] in place
+    assert row.get("silk_cid")
+    assert f'src="cid:{row["silk_cid"]}"' in p.html
+
+
+def test_render_skips_silk_when_url_missing():
+    row = _ran_row()
+    p = render(
+        run_date=date(2026, 4, 24), entered=[], ran_today=[row], mode="evening",
+    )
+    assert "silk_cid" not in row
+    assert "cid:silk-" not in p.html
+
+
 def test_text_variant_is_plain():
     p = render(
         run_date=date(2026, 4, 24),

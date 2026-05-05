@@ -20,3 +20,5 @@ data/cache/
 data/last_preview.html
 data/last_preview.txt
 data/breezeup.sqlite
+data/breezeup.sqlite-shm
+data/breezeup.sqlite-wal
