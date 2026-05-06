@@ -32,11 +32,6 @@ _SILK_RENDER_W = 80
 _SILK_RENDER_H = 57          # 80 * 70.53 / 98.45, rounded
 SILK_DISPLAY_W = 56
 SILK_DISPLAY_H = 40          # 56 * 70.53 / 98.45, rounded
-# RP silks are natively ~98pt x 70pt (aspect h/w ≈ 0.72 — wider than tall),
-# so we ask resvg for width only and let it derive height from the viewBox.
-# Render at 2× the display width for crisp downsampling on retina email
-# clients; the HTML img tag pins the actual display size.
-_SILK_RENDER_PX = 160
 _FETCH_TIMEOUT = 15
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -91,7 +86,6 @@ def _svg_to_png(svg: bytes) -> bytes | None:
             svg_string=_sanitise_svg(svg),
             width=_SILK_RENDER_W,
             height=_SILK_RENDER_H,
-            width=_SILK_RENDER_PX,
             background="white",
         )
         return bytes(png)
