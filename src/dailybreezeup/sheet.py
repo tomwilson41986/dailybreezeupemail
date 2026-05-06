@@ -32,7 +32,9 @@ DEFAULT_SHEET_CSV_URL = (
 # Keep this list in sync with whatever the user types into the sheet.
 _SALE_ALIASES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"craven", re.I), "Craven"),
-    (re.compile(r"goffs.*uk", re.I), "Goffs UK"),
+    # The gSheet labels Goffs UK breeze-up rows as "Goffs" (no UK suffix), so
+    # the short label here must match exactly for the (year, sale, lot) join.
+    (re.compile(r"goffs.*uk", re.I), "Goffs"),
     (re.compile(r"arqana", re.I), "Arqana"),
     (re.compile(r"tattersalls\s+ireland", re.I), "Tattersalls Ireland"),
 )

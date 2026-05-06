@@ -25,6 +25,13 @@ import requests
 
 log = logging.getLogger(__name__)
 
+# RP silks are exported with viewBox "0 0 98.45 70.53" (landscape, ~1.4:1).
+# Render at 2x the email display size so retina screens stay crisp; the
+# template displays at SILK_DISPLAY_W x SILK_DISPLAY_H below.
+_SILK_RENDER_W = 80
+_SILK_RENDER_H = 57          # 80 * 70.53 / 98.45, rounded
+SILK_DISPLAY_W = 56
+SILK_DISPLAY_H = 40          # 56 * 70.53 / 98.45, rounded
 # RP silks are natively ~98pt x 70pt (aspect h/w ≈ 0.72 — wider than tall),
 # so we ask resvg for width only and let it derive height from the viewBox.
 # Render at 2× the display width for crisp downsampling on retina email
@@ -82,6 +89,8 @@ def _svg_to_png(svg: bytes) -> bytes | None:
     try:
         png = resvg_py.svg_to_bytes(
             svg_string=_sanitise_svg(svg),
+            width=_SILK_RENDER_W,
+            height=_SILK_RENDER_H,
             width=_SILK_RENDER_PX,
             background="white",
         )
