@@ -39,7 +39,7 @@ def test_parse_sheet_csv_handles_missing_numerics():
 
 def test_sale_short_name_aliases():
     assert sale_short_name("Tattersalls Craven Breeze Up Sale 2026") == "Craven"
-    assert sale_short_name("Goffs UK 2yo Breeze Up Sale 2026") == "Goffs UK"
+    assert sale_short_name("Goffs UK 2yo Breeze Up Sale 2026") == "Goffs"
     assert sale_short_name("Arqana May 2yo Breeze Up 2026") == "Arqana"
     assert sale_short_name("Tattersalls Ireland Breeze Up Sale 2026") == "Tattersalls Ireland"
     assert sale_short_name("Some Other Sale") is None

@@ -25,7 +25,13 @@ import requests
 
 log = logging.getLogger(__name__)
 
-_SILK_PX = 80                # rendered width in CSS pixels
+# RP silks are exported with viewBox "0 0 98.45 70.53" (landscape, ~1.4:1).
+# Render at 2x the email display size so retina screens stay crisp; the
+# template displays at SILK_DISPLAY_W x SILK_DISPLAY_H below.
+_SILK_RENDER_W = 80
+_SILK_RENDER_H = 57          # 80 * 70.53 / 98.45, rounded
+SILK_DISPLAY_W = 56
+SILK_DISPLAY_H = 40          # 56 * 70.53 / 98.45, rounded
 _FETCH_TIMEOUT = 15
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -78,8 +84,8 @@ def _svg_to_png(svg: bytes) -> bytes | None:
     try:
         png = resvg_py.svg_to_bytes(
             svg_string=_sanitise_svg(svg),
-            width=_SILK_PX,
-            height=int(_SILK_PX * 1.2),
+            width=_SILK_RENDER_W,
+            height=_SILK_RENDER_H,
             background="white",
         )
         return bytes(png)
