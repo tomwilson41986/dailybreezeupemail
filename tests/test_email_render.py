@@ -103,18 +103,18 @@ def test_morning_empty_case():
     assert "next 3 days" in p.html  # default window when not specified
 
 
-def test_render_empty_case_includes_diagnostics():
+def test_render_empty_case_omits_diagnostics():
     p = render(
         run_date=date(2026, 4, 24),
         entered=[],
         ran_today=[],
         diagnostics={"run_kind": "live", "sales_found": 0, "dedup_dropped_entered": 3},
-        mode="morning",
+        mode="evening",
     )
-    assert "Run diagnostics" in p.html
-    assert "sales_found" in p.html
-    assert "dedup_dropped_entered" in p.text
-    assert "run_kind: live" in p.text
+    assert "Run diagnostics" not in p.html
+    assert "sales_found" not in p.html
+    assert "dedup_dropped_entered" not in p.text
+    assert "run_kind" not in p.text
 
 
 def test_render_links_race_urls_in_html():

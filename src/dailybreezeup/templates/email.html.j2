@@ -163,14 +163,6 @@
       {% else %}
       <div style="background:#fff;border:1px solid #e3e3de;border-radius:8px;padding:20px;">
         <p style="margin:0;color:#444;font-size:15px;font-weight:600;">No Results Today</p>
-        {% if diagnostics %}
-        <table cellspacing="0" cellpadding="6" style="border-collapse:collapse;font-size:12px;color:#555;background:#faf7f0;margin-top:14px;border-radius:4px;">
-          <tr><td colspan="{{ ncols }}"><strong>Run diagnostics</strong></td></tr>
-          {% for k, v in diagnostics.items() %}
-          <tr><td style="padding-right:12px;">{{ k }}</td><td>{{ v }}</td></tr>
-          {% endfor %}
-        </table>
-        {% endif %}
       </div>
       {% endif %}
     {% else %}
@@ -182,14 +174,6 @@
       {% else %}
       <div style="background:#fff;border:1px solid #e3e3de;border-radius:8px;padding:20px;">
         <p style="margin:0;color:#444;">No breeze-up graduates entered in the next {{ entries_window_days }} day{{ '' if entries_window_days == 1 else 's' }}.</p>
-        {% if diagnostics %}
-        <table cellspacing="0" cellpadding="6" style="border-collapse:collapse;font-size:12px;color:#555;background:#faf7f0;margin-top:14px;border-radius:4px;">
-          <tr><td colspan="{{ ncols }}"><strong>Run diagnostics</strong></td></tr>
-          {% for k, v in diagnostics.items() %}
-          <tr><td style="padding-right:12px;">{{ k }}</td><td>{{ v }}</td></tr>
-          {% endfor %}
-        </table>
-        {% endif %}
       </div>
       {% endif %}
     {% endif %}
