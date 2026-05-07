@@ -140,11 +140,6 @@ def _render_text(
                 f"No breeze-up graduates entered in the next "
                 f"{entries_window_days} day{'' if entries_window_days == 1 else 's'}."
             )
-    if total == 0 and diagnostics:
-        parts.append("")
-        parts.append("---- Run diagnostics ----")
-        for k, v in diagnostics.items():
-            parts.append(f"{k}: {v}")
     sheet_status = diagnostics.get("sheet_status")
     if sheet_status and total > 0:
         parts.append("")
