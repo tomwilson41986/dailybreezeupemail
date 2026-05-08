@@ -89,7 +89,7 @@ def _fmt_card(row: dict[str, Any], *, ran: bool) -> list[str]:
             sl_part = (
                 f"SL 1F {sl_1f:.2f}" if sl_1f is not None else "SL 1F —"
             ) + (
-                f"  ·  Going {sl_go:.2f}" if sl_go is not None else "  ·  Going —"
+                f"  ·  SL GO {sl_go:.2f}" if sl_go is not None else "  ·  SL GO —"
             )
             lines.append(f"    {ot_part}  ·  {sl_part}")
 
