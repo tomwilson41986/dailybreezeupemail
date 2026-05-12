@@ -2,7 +2,7 @@
 
 Two scheduled emails per day listing breeze-up sale graduates:
 
-- **Morning (07:00 UTC)** — `--mode morning`: entries & declarations for lots running in the next 3 days. Suppressed when empty unless `NOTIFY_ON_EMPTY=true`.
+- **Morning (04:00 UTC / 05:00 BST)** — `--mode morning`: entries & declarations for lots running in the next 3 days. Suppressed when empty unless `NOTIFY_ON_EMPTY=true`.
 - **Evening (21:00 UTC)** — `--mode evening`: results for lots that ran today. Always sent — quiet days get a "No Results Today" notice.
 
 Source is Racing Post's bloodstock sale catalogue (the authoritative join between a lot and its race entry), supplemented by the live racecards index for any entries the catalogue's `entry_details` field hasn't been updated to reflect.
@@ -22,7 +22,7 @@ The catalogue JSON is authoritative for lot metadata (sire/dam, vendor, price, b
 
 ## Where it runs
 
-Production cron lives in **GitHub Actions**: `.github/workflows/daily.yml` schedules 07:00 and 21:00 UTC runs on `ubuntu-latest`. The workflow uses `curl_cffi` (Chrome 124 TLS/HTTP-2 fingerprint) to bypass Racing Post's Fastly bot filter from cloud IPs — a plain `requests` UA gets a challenge page back.
+Production cron lives in **GitHub Actions**: `.github/workflows/daily.yml` schedules 04:00 and 21:00 UTC runs on `ubuntu-latest`. The workflow uses `curl_cffi` (Chrome 124 TLS/HTTP-2 fingerprint) to bypass Racing Post's Fastly bot filter from cloud IPs — a plain `requests` UA gets a challenge page back.
 
 To trigger a one-off run: **Actions → daily-breezeup-email → Run workflow**. Inputs cover date override, dry-run, demo mode (skips live RP fetch — handy for layout checks), mode override, entries window, and `notify_on_empty`.
 
@@ -79,7 +79,7 @@ src/dailybreezeup/
   templates/
     email.html.j2       # rendered HTML (inline silks via cid:)
 .github/workflows/
-  daily.yml             # 07:00 / 21:00 UTC cron + manual dispatch
+  daily.yml             # 04:00 / 21:00 UTC cron + manual dispatch
 data/
   breezeup.sqlite       # committed — run_log + email_log for dedup
 tests/
