@@ -1,8 +1,11 @@
 name: daily-breezeup-email
 
 # Two scheduled runs per day plus manual dispatch:
-#   07:00 UTC - morning run (--mode morning): entries & declarations in the
-#               next 3 days. Suppressed when empty unless notify_on_empty=true.
+#   04:00 UTC - morning run (--mode morning): entries & declarations in the
+#               next 3 days. 04:00 UTC = 05:00 BST / 04:00 GMT. Off-the-hour
+#               avoidance isn't applied because GHA cron throttling primarily
+#               bites at the top of business hours; 04:00 UTC is quiet.
+#               Suppressed when empty unless notify_on_empty=true.
 #   21:00 UTC - evening run (--mode evening): results that ran today. Always
 #               sends, even on a quiet day (subject: "No Results Today").
 #
@@ -16,7 +19,7 @@ name: daily-breezeup-email
 # to a Hetzner VPS.
 on:
   schedule:
-    - cron: "0 7 * * *"
+    - cron: "0 4 * * *"
     - cron: "0 21 * * *"
   workflow_dispatch:
     inputs:
