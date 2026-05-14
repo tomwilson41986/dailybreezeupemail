@@ -57,12 +57,14 @@ def _fmt_card(row: dict[str, Any], *, ran: bool) -> list[str]:
 
     if ran:
         finish = row.get("finishing_position") or "—"
+        total = row.get("total_runners")
+        finish_label = f"{finish} / {total}" if total else finish
         sp = row.get("sp") or "—"
         off = row.get("off_time")
         race_name = row.get("race_name") or ""
         time_prefix = f"{off.strftime('%H:%M')} " if off else ""
         race_suffix = f" · {race_name}" if race_name else ""
-        lines.append(f"    ► Finish {finish}  ·  SP {sp}")
+        lines.append(f"    ► Finish {finish_label}  ·  SP {sp}")
         lines.append(f"    ► {time_prefix}{row['course']}{race_suffix}")
     else:
         lines.append(f"    ► {row['race_date']:%a %d %b} · {row['course']}")

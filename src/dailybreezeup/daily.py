@@ -93,6 +93,7 @@ def _ran_row(lot: rp_sales.SaleLot, hit: rp_results.ResultHit) -> dict[str, Any]
         "off_time": hit.off_time,
         "race_name": hit.race_name,
         "finishing_position": hit.finishing_position,
+        "total_runners": hit.total_runners,
         "sp": hit.sp,
         "race_url": hit.race_url,
         "horse_name": hit.horse_name or lot.horse_name,

@@ -155,6 +155,28 @@ def test_text_variant_is_plain():
     assert "Havana Grey" in p.text
 
 
+def test_finish_position_renders_total_runners():
+    row = _ran_row()
+    row["finishing_position"] = "4"
+    row["total_runners"] = 10
+    p = render(
+        run_date=date(2026, 4, 24), entered=[], ran_today=[row], mode="evening",
+    )
+    assert "/ 10" in p.html
+    assert "Finish 4 / 10" in p.text
+
+
+def test_finish_position_omits_total_when_missing():
+    row = _ran_row()
+    row["finishing_position"] = "4"
+    # total_runners absent
+    p = render(
+        run_date=date(2026, 4, 24), entered=[], ran_today=[row], mode="evening",
+    )
+    assert "Finish 4 " in p.text
+    assert "/ 10" not in p.html
+
+
 def test_invalid_mode_rejected():
     import pytest
     with pytest.raises(ValueError):
