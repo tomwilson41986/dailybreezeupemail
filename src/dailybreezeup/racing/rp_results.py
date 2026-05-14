@@ -54,6 +54,7 @@ _DOC_HEADERS = {
 _RESULT_PATH_RE = re.compile(r"/results/\d+/([a-z][a-z0-9-]*)/(\d{4}-\d{2}-\d{2})/(\d+)")
 _PROFILE_RE = re.compile(r"/profile/horse/(\d+)/([a-z0-9-]+)")
 _TIME_RE = re.compile(r"(\d{1,2})[:.](\d{2})")
+_RAN_RE = re.compile(r"(\d+)\s+ran\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,7 @@ class ResultHit:
     race_url: str
     race_uid: str
     silk_url: str | None
+    total_runners: int | None
 
 
 def _course_display(slug: str) -> str:
@@ -123,8 +125,22 @@ def parse_result_page_hits(
     )
     race_name = " ".join("".join(race_name_nodes).split()) if race_name_nodes else ""
 
+    # "X ran" is published in the post-race info strip; fall back to the row
+    # count if the markup ever changes shape.
+    total_runners: int | None = None
+    for txt in doc.xpath(
+        '//*[contains(@class,"rp-raceInfo__value_black")]//text()'
+    ):
+        m = _RAN_RE.search(txt)
+        if m:
+            total_runners = int(m.group(1))
+            break
+    main_rows = doc.xpath('//tr[contains(@class,"rp-horseTable__mainRow")]')
+    if total_runners is None and main_rows:
+        total_runners = len(main_rows)
+
     hits: list[ResultHit] = []
-    for row in doc.xpath('//tr[contains(@class,"rp-horseTable__mainRow")]'):
+    for row in main_rows:
         anchors = row.xpath('.//a[contains(@href,"/profile/horse/")]/@href')
         uid_match: tuple[int, str] | None = None
         for href in anchors:
@@ -162,6 +178,7 @@ def parse_result_page_hits(
                 race_url=race_url,
                 race_uid=race_uid,
                 silk_url=silk_url,
+                total_runners=total_runners,
             )
         )
     return hits

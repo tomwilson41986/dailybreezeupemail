@@ -71,6 +71,7 @@ def test_parse_result_page_hits_matches_uid_in_target_set():
     assert "Maiden" in h.race_name
     assert h.silk_url and h.silk_url.startswith("https://www.rp-assets.com/svg/")
     assert h.silk_url.endswith(".svg")
+    assert h.total_runners == 8
 
 
 def test_parse_result_page_hits_empty_when_uid_not_in_target():
