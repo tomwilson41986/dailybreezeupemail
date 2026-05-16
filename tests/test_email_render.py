@@ -177,6 +177,51 @@ def test_finish_position_omits_total_when_missing():
     assert "/ 10" not in p.html
 
 
+def test_morning_renders_off_time_when_present():
+    row = _entered_row(off_time=time(14, 30), race_name="Maiden Stakes")
+    p = render(
+        run_date=date(2026, 4, 24),
+        entered=[row],
+        ran_today=[],
+        mode="morning",
+    )
+    assert "14:30" in p.html
+    assert "14:30" in p.text
+    assert "Maiden Stakes" in p.html
+    assert "Maiden Stakes" in p.text
+
+
+def test_morning_omits_off_time_when_missing():
+    p = render(
+        run_date=date(2026, 4, 24),
+        entered=[_entered_row()],
+        ran_today=[],
+        mode="morning",
+    )
+    assert "Sat 03 Oct" in p.html
+
+
+def test_sl_go_label_replaces_going():
+    row = _entered_row(
+        sheet_matched=True,
+        sheet_breeze_rating=None,
+        sheet_precocity_rating=None,
+        sheet_ot_rank=None,
+        sheet_sl_1f=11.25,
+        sheet_sl_go=0.42,
+    )
+    p = render(
+        run_date=date(2026, 4, 24),
+        entered=[row],
+        ran_today=[],
+        mode="morning",
+    )
+    assert "SL GO 0.42" in p.html
+    assert "SL GO 0.42" in p.text
+    assert "Going" not in p.html
+    assert "Going" not in p.text
+
+
 def test_invalid_mode_rejected():
     import pytest
     with pytest.raises(ValueError):

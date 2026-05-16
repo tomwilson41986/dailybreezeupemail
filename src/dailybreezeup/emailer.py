@@ -67,7 +67,13 @@ def _fmt_card(row: dict[str, Any], *, ran: bool) -> list[str]:
         lines.append(f"    ► Finish {finish_label}  ·  SP {sp}")
         lines.append(f"    ► {time_prefix}{row['course']}{race_suffix}")
     else:
-        lines.append(f"    ► {row['race_date']:%a %d %b} · {row['course']}")
+        off = row.get("off_time")
+        time_prefix = f"{off.strftime('%H:%M')} " if off else ""
+        race_name = row.get("race_name") or ""
+        race_suffix = f" · {race_name}" if race_name else ""
+        lines.append(
+            f"    ► {row['race_date']:%a %d %b} · {time_prefix}{row['course']}{race_suffix}"
+        )
 
     if row.get("sheet_matched"):
         br = row.get("sheet_breeze_rating")
@@ -91,7 +97,7 @@ def _fmt_card(row: dict[str, Any], *, ran: bool) -> list[str]:
             sl_part = (
                 f"SL 1F {sl_1f:.2f}" if sl_1f is not None else "SL 1F —"
             ) + (
-                f"  ·  Going {sl_go:.2f}" if sl_go is not None else "  ·  Going —"
+                f"  ·  SL GO {sl_go:.2f}" if sl_go is not None else "  ·  SL GO —"
             )
             lines.append(f"    {ot_part}  ·  {sl_part}")
 
