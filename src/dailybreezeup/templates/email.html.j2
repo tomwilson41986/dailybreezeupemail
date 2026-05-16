@@ -107,8 +107,10 @@
                 {%- if row.race_name %} &middot; <span style="color:#666;">{{ row.race_name }}</span>{% endif %}
               {%- else %}
                 <strong>{{ row.race_date.strftime("%a %d %b") }}</strong>
+                {%- if row.off_time %} <strong>{{ row.off_time.strftime("%H:%M") }}</strong>{% endif %}
                 <span style="color:#bbb;margin:0 8px;">|</span>
                 <a href="{{ row.race_url }}" style="color:#1a5fb4;text-decoration:none;font-weight:600;">{{ row.course }}</a>
+                {%- if row.race_name %} &middot; <span style="color:#666;">{{ row.race_name }}</span>{% endif %}
               {%- endif %}
             </div>
           </td>
@@ -127,7 +129,7 @@
                 <span style="color:#ccc;margin:0 8px;">·</span>
                 <span style="color:#444;font-weight:600;">SL</span>
                 {%- if row.sheet_sl_1f is not none %} 1F {{ "%.2f"|format(row.sheet_sl_1f) }}{% endif -%}
-                {%- if row.sheet_sl_go is not none %} <span style="color:#999;">·</span> Going {{ "%.2f"|format(row.sheet_sl_go) }}{% endif -%}
+                {%- if row.sheet_sl_go is not none %} <span style="color:#999;">·</span> SL GO {{ "%.2f"|format(row.sheet_sl_go) }}{% endif -%}
               {%- endif %}
             </div>
           </td>
