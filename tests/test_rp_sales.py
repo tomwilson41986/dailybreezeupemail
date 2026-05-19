@@ -132,6 +132,60 @@ def test_fallback_sales_unknown_year_returns_empty():
     assert rp_sales._fallback_sales(2099) == []
 
 
+def test_extra_sales_includes_tattersalls_guineas_2026():
+    """The Tattersalls Guineas Breeze Up is the tail of a Horses-in-Training
+    sale on RP, so its name doesn't match /breeze.?up/i. It has to be merged
+    in explicitly via the _EXTRA_SALES table."""
+    extras = rp_sales._extra_sales(2026)
+    assert len(extras) == 1
+    sale = extras[0]
+    assert sale.venue_uid == 5
+    assert sale.sale_date == date(2026, 4, 30)
+    assert "Guineas" in sale.sale_name
+    # Breeze-up section starts after lot 161 (lots 162+).
+    assert sale.min_lot_no == 162
+    # Distinct URL from the Craven sale at the same venue.
+    assert sale.sale_id == "rp-5-2026-04-30"
+
+
+def test_merge_sales_dedupes_by_sale_id_and_preserves_order():
+    a = rp_sales.Sale(venue_uid=5, sale_date=date(2026, 4, 14),
+                      sale_end_date=date(2026, 4, 15),
+                      sale_name="A", sale_co="X")
+    b = rp_sales.Sale(venue_uid=5, sale_date=date(2026, 4, 30),
+                      sale_end_date=date(2026, 5, 1),
+                      sale_name="B", sale_co="X", min_lot_no=162)
+    dup_a = rp_sales.Sale(venue_uid=5, sale_date=date(2026, 4, 14),
+                          sale_end_date=date(2026, 4, 15),
+                          sale_name="A again", sale_co="X")
+    merged = rp_sales._merge_sales([a], [b, dup_a])
+    assert [s.sale_name for s in merged] == ["A", "B"]
+
+
+def test_parse_lots_page_respects_min_lot_no_via_filter():
+    """``parse_lots_page`` itself is unfiltered (it returns every row in the
+    page so callers can paginate), but ``fetch_lots`` applies the
+    ``Sale.min_lot_no`` cutoff after collecting all pages. Simulate that here
+    by parsing the Craven fixture against a Guineas-shaped sale."""
+    sale = rp_sales.Sale(
+        venue_uid=5,
+        sale_date=date(2026, 4, 30),
+        sale_end_date=date(2026, 5, 1),
+        sale_name="Tattersalls Guineas Breeze Up Sale 2026",
+        sale_co="Tattersalls",
+        min_lot_no=162,
+    )
+    lots, _, _ = rp_sales.parse_lots_page(
+        _read("sale_catalogue_craven_2026_p4.json"), sale
+    )
+    # parse_lots_page must not pre-filter — that would break pagination logic.
+    assert any(lot.lot_no < 162 for lot in lots)
+    # The post-fetch filter (mirrored from fetch_lots) drops the early lots.
+    kept = [lot for lot in lots if lot.lot_no >= sale.min_lot_no]
+    assert kept
+    assert all(lot.lot_no >= 162 for lot in kept)
+
+
 def test_demo_lots_returns_four_entered_craven_lots():
     lots = rp_sales.demo_lots()
     assert len(lots) == 4

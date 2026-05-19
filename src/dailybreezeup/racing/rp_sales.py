@@ -106,6 +106,18 @@ _BREEZE_UP_FALLBACK: dict[int, list[tuple[int, str, str, str, str]]] = {
     ],
 }
 
+# Sales whose RP-published name does NOT match /breeze.?up/i but which contain
+# a breeze-up section we still want to report on. The Tattersalls Guineas sale
+# is listed as "Horses-in-Training" on RP but its later lots are catalogued
+# breeze-ups. These are always merged in alongside whatever ``discover_sales``
+# returns from the index page. ``min_lot_no`` trims out the non-breeze-up lots
+# at the top of the catalogue.
+_EXTRA_SALES: dict[int, list[tuple[int, str, str, str, str, int]]] = {
+    2026: [
+        (5, "2026-04-30", "2026-05-01", "Tattersalls Guineas Breeze Up Sale 2026", "Tattersalls", 162),
+    ],
+}
+
 
 @dataclass(frozen=True)
 class Sale:
@@ -114,6 +126,10 @@ class Sale:
     sale_end_date: date
     sale_name: str
     sale_co: str
+    # First lot number we care about. Default 0 = report everything. Used by
+    # mixed-content catalogues like the Tattersalls Guineas sale, whose first
+    # ~161 lots are Horses-in-Training and only the tail is breeze-up.
+    min_lot_no: int = 0
 
     @property
     def sale_id(self) -> str:
@@ -314,6 +330,43 @@ def _fallback_sales(year: int) -> list[Sale]:
     return out
 
 
+def _extra_sales(year: int) -> list[Sale]:
+    """Manually-registered sales whose RP name doesn't match /breeze.?up/i but
+    which include a breeze-up section we want to report on."""
+    rows = _EXTRA_SALES.get(year)
+    if not rows:
+        return []
+    out: list[Sale] = []
+    for venue_uid, raw_start, raw_end, name, co, min_lot in rows:
+        try:
+            out.append(
+                Sale(
+                    venue_uid=venue_uid,
+                    sale_date=date.fromisoformat(raw_start),
+                    sale_end_date=date.fromisoformat(raw_end),
+                    sale_name=name,
+                    sale_co=co,
+                    min_lot_no=min_lot,
+                )
+            )
+        except ValueError:
+            continue
+    return out
+
+
+def _merge_sales(*groups: Iterable[Sale]) -> list[Sale]:
+    """Concatenate sale lists, deduping by ``sale_id`` (first occurrence wins)."""
+    seen: set[str] = set()
+    out: list[Sale] = []
+    for group in groups:
+        for s in group:
+            if s.sale_id in seen:
+                continue
+            seen.add(s.sale_id)
+            out.append(s)
+    return out
+
+
 def _warm_up(s: requests.Session) -> None:
     """Walk a real Chrome navigation: home -> bloodstock. Each call swallows
     failures so a 503 on warm-up doesn't kill the job; the discover call
@@ -345,6 +398,7 @@ def discover_sales(
     """
     s = session or _make_session()
     _warm_up(s)
+    extras = _extra_sales(year)
     try:
         r = _get(
             s,
@@ -357,11 +411,11 @@ def discover_sales(
         )
         sales = filter_breeze_ups(parse_catalogues_index_html(r.text), year)
         if sales:
-            return sales
+            return _merge_sales(sales, extras)
         log.warning("RP catalogues index returned 0 breeze-up sales for %d; using fallback", year)
     except Exception as exc:  # noqa: BLE001
         log.warning("RP catalogues index fetch failed (%s); using fallback", exc)
-    return _fallback_sales(year)
+    return _merge_sales(_fallback_sales(year), extras)
 
 
 def demo_lots() -> list[SaleLot]:
@@ -481,4 +535,6 @@ def fetch_lots(sale: Sale, *, session: requests.Session | None = None, sleep: fl
             break
         page = current + 1
         wall.sleep(sleep)
+    if sale.min_lot_no > 0:
+        out = [lot for lot in out if lot.lot_no >= sale.min_lot_no]
     return out

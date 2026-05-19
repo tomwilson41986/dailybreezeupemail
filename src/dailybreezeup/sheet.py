@@ -37,6 +37,8 @@ _SALE_ALIASES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"goffs.*uk", re.I), "Goffs"),
     (re.compile(r"arqana", re.I), "Arqana"),
     (re.compile(r"tattersalls\s+ireland", re.I), "Tattersalls Ireland"),
+    # Tattersalls Guineas Breeze Up — the breeze-up tail of the Guineas HIT sale.
+    (re.compile(r"guineas", re.I), "Guineas"),
 )
 
 
