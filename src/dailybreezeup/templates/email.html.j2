@@ -53,6 +53,74 @@
       <span style="display:inline-block;background:{{ bg }};color:{{ fg }};font-weight:700;font-size:13px;padding:2px 10px;border-radius:10px;">{{ pos or "—" }}{% if total %}<span style="color:#888;font-weight:600;"> / {{ total }}</span>{% endif %}</span>
     {%- endmacro -%}
 
+    {%- macro status_badge(kind, label) -%}
+      {%- if kind == "won" -%}
+        {%- set bg, fg = "#cce5cc", "#1f4a1f" -%}
+      {%- elif kind == "placed" -%}
+        {%- set bg, fg = "#f5efde", "#6a5a30" -%}
+      {%- elif kind == "ran" -%}
+        {%- set bg, fg = "#ececec", "#555" -%}
+      {%- else -%}
+        {%- set bg, fg = "#f4f4f1", "#999" -%}
+      {%- endif -%}
+      <span style="display:inline-block;background:{{ bg }};color:{{ fg }};font-weight:700;font-size:11px;letter-spacing:0.04em;padding:2px 8px;border-radius:10px;">{{ label }}</span>
+    {%- endmacro -%}
+
+    {%- macro stat_row(label, n_runners, n_winners, strike_rate, avg_rpr, low_n) -%}
+      {%- if low_n -%}
+        {%- set rowstyle = "color:#999;font-style:italic;" -%}
+      {%- else -%}
+        {%- set rowstyle = "color:#1a1a1a;" -%}
+      {%- endif -%}
+      <tr style="{{ rowstyle }}">
+        <td style="padding:6px 8px;font-size:13px;border-top:1px solid #efefe9;">{{ label }}</td>
+        <td style="padding:6px 8px;font-size:13px;text-align:right;border-top:1px solid #efefe9;">{{ n_runners }}</td>
+        <td style="padding:6px 8px;font-size:13px;text-align:right;border-top:1px solid #efefe9;">{{ n_winners }}</td>
+        <td style="padding:6px 8px;font-size:13px;text-align:right;border-top:1px solid #efefe9;font-weight:600;">{{ "%.0f%%"|format(strike_rate * 100) }}</td>
+        <td style="padding:6px 8px;font-size:13px;text-align:right;border-top:1px solid #efefe9;">{% if avg_rpr is not none %}{{ "%.0f"|format(avg_rpr) }}{% else %}&mdash;{% endif %}</td>
+      </tr>
+    {%- endmacro -%}
+
+    {%- macro stat_table_header() -%}
+      <thead>
+        <tr>
+          <th style="padding:6px 8px;text-align:left;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Band</th>
+          <th style="padding:6px 8px;text-align:right;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Runners</th>
+          <th style="padding:6px 8px;text-align:right;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Wins</th>
+          <th style="padding:6px 8px;text-align:right;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">SR</th>
+          <th style="padding:6px 8px;text-align:right;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Avg RPR</th>
+        </tr>
+      </thead>
+    {%- endmacro -%}
+
+    {%- macro top_table(rows, rating_label) -%}
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fff;border:1px solid #e3e3de;border-radius:8px;margin-bottom:12px;">
+        <thead>
+          <tr>
+            <th style="padding:8px;text-align:right;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;width:1%;">#</th>
+            <th style="padding:8px;text-align:right;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">{{ rating_label }}</th>
+            <th style="padding:8px;text-align:left;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Horse</th>
+            <th style="padding:8px;text-align:left;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Status</th>
+            <th style="padding:8px;text-align:right;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Peak RPR</th>
+          </tr>
+        </thead>
+        <tbody>
+          {%- for h in rows %}
+          <tr>
+            <td style="padding:8px;font-size:13px;text-align:right;color:#888;border-top:1px solid #efefe9;">{{ loop.index }}</td>
+            <td style="padding:8px;font-size:14px;font-weight:700;text-align:right;border-top:1px solid #efefe9;">{% if h.rating is not none %}{{ "%.1f"|format(h.rating) }}{% else %}&mdash;{% endif %}</td>
+            <td style="padding:8px;font-size:13px;border-top:1px solid #efefe9;">
+              <div style="color:#1a1a1a;font-weight:600;">{{ h.horse_name }}</div>
+              <div style="color:#888;font-size:11px;">{{ h.lot_label }}{% if h.lot_label and h.sale_label %} &middot; {% endif %}{{ h.sale_label }}</div>
+            </td>
+            <td style="padding:8px;font-size:13px;border-top:1px solid #efefe9;">{{ status_badge(h.status_kind, h.status_label) }}</td>
+            <td style="padding:8px;font-size:13px;text-align:right;border-top:1px solid #efefe9;font-weight:600;">{% if h.peak_rpr is not none %}{{ h.peak_rpr }}{% else %}&mdash;{% endif %}</td>
+          </tr>
+          {%- endfor %}
+        </tbody>
+      </table>
+    {%- endmacro -%}
+
     {%- macro horse_card(row, ran=false) -%}
       {%- set sire = row.sheet_sire or row.sire -%}
       {%- set dam = row.sheet_dam or row.dam -%}
@@ -166,6 +234,74 @@
       <div style="background:#fff;border:1px solid #e3e3de;border-radius:8px;padding:20px;">
         <p style="margin:0;color:#444;font-size:15px;font-weight:600;">No Results Today</p>
       </div>
+      {% endif %}
+
+      {% if season_summary %}
+      <h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#666;margin:32px 0 10px;">
+        Season to date &middot; {{ run_date.year }} &middot; {{ season_summary.total_runs }} run{{ '' if season_summary.total_runs == 1 else 's' }}
+      </h2>
+
+      {% if season_summary.by_breeze_band %}
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fff;border:1px solid #e3e3de;border-radius:8px;margin-bottom:12px;">
+        <tr><td colspan="5" style="padding:10px 12px 4px;font-size:12px;font-weight:700;color:#1a1a1a;letter-spacing:0.04em;">Form by Breeze rating</td></tr>
+        {{ stat_table_header() }}
+        <tbody>
+          {%- for r in season_summary.by_breeze_band %}
+          {{ stat_row(r.label, r.n_runners, r.n_winners, r.strike_rate, r.avg_rpr, r.low_n) }}
+          {%- endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+
+      {% if season_summary.by_precocity_band %}
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fff;border:1px solid #e3e3de;border-radius:8px;margin-bottom:12px;">
+        <tr><td colspan="5" style="padding:10px 12px 4px;font-size:12px;font-weight:700;color:#1a1a1a;letter-spacing:0.04em;">Form by Precocity rating</td></tr>
+        {{ stat_table_header() }}
+        <tbody>
+          {%- for r in season_summary.by_precocity_band %}
+          {{ stat_row(r.label, r.n_runners, r.n_winners, r.strike_rate, r.avg_rpr, r.low_n) }}
+          {%- endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+
+      {% if season_summary.by_sale %}
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fff;border:1px solid #e3e3de;border-radius:8px;margin-bottom:12px;">
+        <tr><td colspan="5" style="padding:10px 12px 4px;font-size:12px;font-weight:700;color:#1a1a1a;letter-spacing:0.04em;">Form by Sale</td></tr>
+        <thead>
+          <tr>
+            <th style="padding:6px 8px;text-align:left;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Sale</th>
+            <th style="padding:6px 8px;text-align:right;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Runners</th>
+            <th style="padding:6px 8px;text-align:right;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Wins</th>
+            <th style="padding:6px 8px;text-align:right;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">SR</th>
+            <th style="padding:6px 8px;text-align:right;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Avg RPR</th>
+          </tr>
+        </thead>
+        <tbody>
+          {%- for r in season_summary.by_sale %}
+          {{ stat_row(r.sale_label, r.n_runners, r.n_winners, r.strike_rate, r.avg_rpr, r.low_n) }}
+          {%- endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+
+      {% if season_summary.top_breeze %}
+      <h3 style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#666;margin:18px 0 8px;">
+        Top 10 by Breeze rating
+      </h3>
+      {{ top_table(season_summary.top_breeze, "Breeze") }}
+      {% endif %}
+
+      {% if season_summary.top_precocity %}
+      <h3 style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#666;margin:18px 0 8px;">
+        Top 10 by Precocity rating
+      </h3>
+      {{ top_table(season_summary.top_precocity, "Precocity") }}
+      {% endif %}
+
+      <p style="font-size:11px;color:#999;font-style:italic;margin-top:4px;">
+        Italic rows = small sample (n &lt; {{ season_summary.low_n_threshold }}).
+      </p>
       {% endif %}
     {% else %}
       {% if entered %}

@@ -24,10 +24,11 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from dailybreezeup.config import Settings, load as load_settings
-from dailybreezeup.db import session
+from dailybreezeup.db import session, upsert_result_row
 from dailybreezeup.emailer import EmailPayload, render, send
 from dailybreezeup.racing import rp_racecards, rp_results, rp_sales
 from dailybreezeup import sheet as sheet_mod
+from dailybreezeup import stats as stats_mod
 
 log = logging.getLogger("dailybreezeup.daily")
 UK = ZoneInfo("Europe/London")
@@ -106,6 +107,7 @@ def _ran_row(lot: rp_sales.SaleLot, hit: rp_results.ResultHit) -> dict[str, Any]
         "finishing_position": hit.finishing_position,
         "total_runners": hit.total_runners,
         "sp": hit.sp,
+        "rpr": hit.rpr,
         "race_url": hit.race_url,
         "horse_name": hit.horse_name or lot.horse_name,
         "silk_url": hit.silk_url,
@@ -422,6 +424,23 @@ def run(
                 diagnostics["dedup_dropped_ran_today"] = dropped_ran
         diagnostics["entries_window_days"] = entries_window_days
 
+        # Persist today's result hits before we render so the season-to-date
+        # summary at the bottom of the evening email includes them. The
+        # archive upsert is idempotent on (lot_id, race_uid) so re-runs are
+        # safe — and demo mode skips it to keep the demo DB clean.
+        if mode == "evening" and not demo:
+            for row in ran:
+                upsert_result_row(conn, row)
+
+        season_summary = None
+        if mode == "evening":
+            archive_rows = conn.execute(
+                "SELECT * FROM results_archive WHERE sale_year = ?", (today.year,)
+            ).fetchall()
+            season_summary = stats_mod.build_summary(archive_rows)
+            if season_summary:
+                diagnostics["season_runs"] = season_summary["total_runs"]
+
         payload = render(
             run_date=today,
             entered=entered,
@@ -429,6 +448,7 @@ def run(
             entries_window_days=entries_window_days,
             diagnostics=diagnostics,
             mode=mode,
+            season_summary=season_summary,
         )
         _write_preview(payload)
 

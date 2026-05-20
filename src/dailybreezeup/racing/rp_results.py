@@ -72,6 +72,7 @@ class ResultHit:
     race_uid: str
     silk_url: str | None
     total_runners: int | None
+    rpr: int | None
 
 
 def _course_display(slug: str) -> str:
@@ -88,6 +89,16 @@ def _parse_off_time(title: str) -> time | None:
     if 1 <= hh <= 10:
         hh += 12
     return time(hh, mm)
+
+
+def _parse_rating(s: str) -> int | None:
+    """Pull an integer rating out of a rating-column cell.
+
+    RP renders ratings as either a digit string or an en-dash entity
+    (&#8211;) / em-dash for missing values; sometimes there's leading
+    whitespace from the surrounding markup."""
+    digits = "".join(ch for ch in (s or "") if ch.isdigit())
+    return int(digits) if digits else None
 
 
 def parse_results_index_race_urls(html_text: str, on: date) -> list[tuple[str, str, str]]:
@@ -163,6 +174,8 @@ def parse_result_page_hits(
         sp = " ".join("".join(sp_el).split()) or None
         silk_src = row.xpath('.//img[contains(@class,"rp-horseTable__silk")]/@src')
         silk_url = silk_src[0] if silk_src else None
+        rpr_text = "".join(row.xpath('.//td[@data-ending="RPR"]//text()'))
+        rpr = _parse_rating(rpr_text)
 
         hits.append(
             ResultHit(
@@ -179,6 +192,7 @@ def parse_result_page_hits(
                 race_uid=race_uid,
                 silk_url=silk_url,
                 total_runners=total_runners,
+                rpr=rpr,
             )
         )
     return hits

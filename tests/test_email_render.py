@@ -226,3 +226,123 @@ def test_invalid_mode_rejected():
     import pytest
     with pytest.raises(ValueError):
         render(run_date=date(2026, 4, 24), entered=[], ran_today=[], mode="midday")
+
+
+# ── Season-to-date summary section ──────────────────────────────────────────
+
+def _season_summary(**over):
+    """A populated summary with one band, one sale, one top-rated horse —
+    enough to assert every sub-section renders. Used by the tests below."""
+    from dailybreezeup.stats import BandStat, SaleStat, HorseSummary
+    base = {
+        "total_runs": 12,
+        "low_n_threshold": 10,
+        "by_breeze_band": [
+            BandStat("≥90", n_runners=12, n_winners=3, strike_rate=0.25,
+                     avg_rpr=78.5, low_n=False),
+            BandStat("70–89", n_runners=4, n_winners=0, strike_rate=0.0,
+                     avg_rpr=65.0, low_n=True),
+        ],
+        "by_precocity_band": [
+            BandStat("≥90", n_runners=6, n_winners=2, strike_rate=0.333,
+                     avg_rpr=80.0, low_n=True),
+        ],
+        "by_sale": [
+            SaleStat("Craven 2026", "Craven", 2026, n_runners=12, n_winners=3,
+                     strike_rate=0.25, avg_rpr=78.5, low_n=False),
+        ],
+        "top_breeze": [
+            HorseSummary(
+                horse_name="Hot Havana", lot_label="Lot 16",
+                sale_label="Craven 2026", rating=92.5, peak_rpr=88,
+                n_runs=2, n_wins=1, n_placed=0,
+                status_label="WON", status_kind="won",
+            ),
+        ],
+        "top_precocity": [
+            HorseSummary(
+                horse_name="Hot Havana", lot_label="Lot 16",
+                sale_label="Craven 2026", rating=90.0, peak_rpr=88,
+                n_runs=2, n_wins=1, n_placed=0,
+                status_label="WON", status_kind="won",
+            ),
+        ],
+    }
+    base.update(over)
+    return base
+
+
+def test_evening_renders_season_summary_in_html_and_text():
+    summary = _season_summary()
+    p = render(
+        run_date=date(2026, 5, 20),
+        entered=[],
+        ran_today=[_ran_row()],
+        mode="evening",
+        season_summary=summary,
+    )
+    # Section header and overall count
+    assert "Season to date" in p.html
+    assert "SEASON TO DATE" in p.text
+    assert "12 runs" in p.html
+    assert "12 runs" in p.text
+    # Per-band table content
+    assert "Form by Breeze rating" in p.html
+    assert "FORM BY BREEZE RATING" in p.text
+    assert "≥90" in p.html
+    assert "25%" in p.html
+    # Per-sale table
+    assert "Form by Sale" in p.html
+    assert "Craven 2026" in p.html
+    # Top lists with status badge + peak RPR
+    assert "Top 10 by Breeze rating" in p.html
+    assert "Hot Havana" in p.html
+    assert "WON" in p.html
+    assert "88" in p.html  # peak RPR
+    # Footnote about italic = small sample
+    assert "small sample" in p.html
+    assert "n &lt; 10" in p.html
+
+
+def test_evening_low_n_band_has_muted_inline_style():
+    """Bands flagged low_n must render in muted grey italic so a 1/2 SR
+    doesn't compete visually with a 38/150 SR."""
+    summary = _season_summary()
+    p = render(
+        run_date=date(2026, 5, 20),
+        entered=[],
+        ran_today=[_ran_row()],
+        mode="evening",
+        season_summary=summary,
+    )
+    # The 70–89 band is low_n=True in the fixture — its row should carry
+    # the muted style. We assert the style fragment appears somewhere in
+    # the band-row markup.
+    assert "color:#999;font-style:italic" in p.html
+
+
+def test_morning_omits_season_summary_even_if_passed():
+    """The summary block is evening-only. The morning email gates it off
+    in render() so a stray summary passed in doesn't leak into morning."""
+    summary = _season_summary()
+    p = render(
+        run_date=date(2026, 5, 20),
+        entered=[_entered_row()],
+        ran_today=[],
+        mode="morning",
+        season_summary=summary,
+    )
+    assert "Season to date" not in p.html
+    assert "SEASON TO DATE" not in p.text
+
+
+def test_evening_without_summary_skips_section():
+    p = render(
+        run_date=date(2026, 5, 20),
+        entered=[],
+        ran_today=[_ran_row()],
+        mode="evening",
+        season_summary=None,
+    )
+    assert "Season to date" not in p.html
+    assert "SEASON TO DATE" not in p.text

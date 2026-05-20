@@ -72,6 +72,29 @@ def test_parse_result_page_hits_matches_uid_in_target_set():
     assert h.silk_url and h.silk_url.startswith("https://www.rp-assets.com/svg/")
     assert h.silk_url.endswith(".svg")
     assert h.total_runners == 8
+    # RPR is "—" (en-dash) for this 2yo maiden in the captured fixture —
+    # RP typically posts ratings for early-season 2yo maidens late, so
+    # None is the correct extraction.
+    assert h.rpr is None
+
+
+@pytest.mark.parametrize(
+    "s,expected",
+    [
+        ("82", 82),
+        ("  46  ", 46),
+        ("108", 108),
+        # lxml decodes HTML entities before we ever see the cell text, so
+        # the en-dash entity arrives here as a unicode dash, not as the
+        # literal "&#8211;" sequence.
+        ("–", None),    # en-dash
+        ("—", None),    # em-dash
+        ("", None),
+        (None, None),
+    ],
+)
+def test_parse_rating_handles_dashes_and_digits(s, expected):
+    assert rp_results._parse_rating(s) == expected
 
 
 def test_parse_result_page_hits_empty_when_uid_not_in_target():
