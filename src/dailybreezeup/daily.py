@@ -69,13 +69,24 @@ def _lot_row(lot: rp_sales.SaleLot, *, race_uid: str | None) -> dict[str, Any]:
     }
 
 
-def _entered_row(lot: rp_sales.SaleLot) -> dict[str, Any]:
+def _entered_row(
+    lot: rp_sales.SaleLot,
+    *,
+    race_off_times: dict[str, time] | None = None,
+) -> dict[str, Any]:
     entry = lot.entry
     assert entry is not None
-    base = _lot_row(lot, race_uid=str(entry.race_uid))
+    race_uid = str(entry.race_uid)
+    base = _lot_row(lot, race_uid=race_uid)
+    # The catalogue's entry_details does not carry an off-time, so backfill
+    # from the racecard off-times we collected for the entries window. This
+    # lets the morning email always show race time when known, even for
+    # lots whose uid wasn't matched on a racecard (unnamed lots, RP lag).
+    off_time = (race_off_times or {}).get(race_uid)
     base.update({
         "course": entry.course_name.title(),
         "race_date": entry.race_date,
+        "off_time": off_time,
         "race_url": (
             f"https://www.racingpost.com/racecards/{entry.course_uid}/"
             f"{entry.course_name.lower().replace(' ', '-')}/"
@@ -125,6 +136,7 @@ def _classify(
     racecard_entries: list[rp_racecards.RacecardEntry] | None = None,
     *,
     entries_window_days: int,
+    race_off_times: dict[str, time] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     window_end = today + timedelta(days=entries_window_days)
     by_uid: dict[int, rp_sales.SaleLot] = {
@@ -159,7 +171,7 @@ def _classify(
             continue
         if not (today <= lot.entry.race_date <= window_end):
             continue
-        _push(_entered_row(lot))
+        _push(_entered_row(lot, race_off_times=race_off_times))
 
     ran: list[dict[str, Any]] = []
     for hit in results:
@@ -295,6 +307,7 @@ def run(
         all_lots: list[rp_sales.SaleLot]
         hits: list[rp_results.ResultHit] = []
         racecard_entries: list[rp_racecards.RacecardEntry] = []
+        race_off_times: dict[str, time] = {}
         diagnostics: dict[str, Any] = {
             "run_kind": "demo" if demo else "live",
             "mode": mode,
@@ -335,9 +348,12 @@ def run(
                 if uids:
                     for offset in range(settings.entries_window_days + 1):
                         on = today + timedelta(days=offset)
-                        day_entries = rp_racecards.fetch_entries_for_uids(on, uids)
+                        day_entries, day_off_times = (
+                            rp_racecards.fetch_entries_for_uids(on, uids)
+                        )
                         log.info("Racecard hits for %s: %d", on, len(day_entries))
                         racecard_entries.extend(day_entries)
+                        race_off_times.update(day_off_times)
                 diagnostics["racecard_hits"] = len(racecard_entries)
 
         entries_window_days = settings.entries_window_days
@@ -350,6 +366,7 @@ def run(
         entered, ran = _classify(
             today, all_lots, hits, racecard_entries,
             entries_window_days=entries_window_days,
+            race_off_times=race_off_times,
         )
         log.info("entries window: today..+%d days", entries_window_days)
 

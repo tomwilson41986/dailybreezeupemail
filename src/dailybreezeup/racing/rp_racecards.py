@@ -124,16 +124,20 @@ def parse_racecard_page_entries(
     course: str,
     race_date: date,
     target_uids: set[int],
-) -> list[RacecardEntry]:
+) -> tuple[list[RacecardEntry], time | None]:
     """Scan a racecard page for runners whose uid is in ``target_uids``.
+
+    Returns ``(matched_entries, page_off_time)``. The off_time is extracted
+    from the page header regardless of whether any uid matched, so callers
+    can build a race_uid → off_time map covering every race scanned (the
+    morning email uses this to attach race times to catalogue-side entries
+    whose horse_uid was not found in the racecard).
 
     Each runner is a node tagged with ``data-ugc-runnerid="<horse_uid>"``.
     That attribute is the authoritative join key — anchors inside the row
     also include sire/dam profile links, so we cannot rely on
     /profile/horse/<uid> matches alone.
     """
-    if not target_uids:
-        return []
     doc = lxml_html.fromstring(html_text)
 
     title_nodes = doc.xpath("//title/text()")
@@ -142,6 +146,9 @@ def parse_racecard_page_entries(
         time_nodes = doc.xpath('//*[contains(@class,"RC-courseHeader__time")]/text()')
         if time_nodes:
             off_time = _parse_off_time(time_nodes[0])
+
+    if not target_uids:
+        return [], off_time
 
     race_name_nodes = doc.xpath(
         '//*[@data-test-selector="RC-header__raceInstanceTitle"]'
@@ -184,7 +191,7 @@ def parse_racecard_page_entries(
                 silk_url=silk_url,
             )
         )
-    return hits
+    return hits, off_time
 
 
 # ---------- live fetcher ----------
@@ -215,24 +222,31 @@ def fetch_entries_for_uids(
     *,
     sleep: float = 1.2,
     session: requests.Session | None = None,
-) -> list[RacecardEntry]:
-    """Scrape RP's racecards index for ``on`` and emit entries for any uid in scope."""
+) -> tuple[list[RacecardEntry], dict[str, time]]:
+    """Scrape RP's racecards index for ``on`` and emit entries for any uid in scope.
+
+    Returns ``(entries, off_times)`` where ``off_times`` maps ``race_uid`` to
+    the page's off-time for every race scanned (not just the ones with a
+    matched runner). The morning email uses this to attach race times to
+    catalogue-side entries whose horse_uid did not match any racecard runner.
+    """
     uids: set[int] = {int(u) for u in target_uids}
     if not uids:
-        return []
+        return [], {}
     s = session or _make_session()
     try:
         index_html = _fetch(s, f"{BASE}/racecards/{on.isoformat()}")
     except Exception as exc:  # noqa: BLE001
         log.warning("RP racecards index fetch failed (%s): %s", on, exc)
-        return []
+        return [], {}
 
     races = parse_racecards_index_race_urls(index_html, on)
     if not races:
         log.info("RP racecards: no races on %s", on)
-        return []
+        return [], {}
 
     hits: list[RacecardEntry] = []
+    off_times: dict[str, time] = {}
     for i, (course_uid, slug, race_uid, url) in enumerate(races):
         if i:
             wall.sleep(sleep)
@@ -242,17 +256,18 @@ def fetch_entries_for_uids(
             log.warning("RP racecard fetch failed (%s): %s", url, exc)
             continue
         try:
-            hits.extend(
-                parse_racecard_page_entries(
-                    page,
-                    race_url=url,
-                    race_uid=race_uid,
-                    course_uid=course_uid,
-                    course=_course_display(slug),
-                    race_date=on,
-                    target_uids=uids,
-                )
+            page_hits, page_off = parse_racecard_page_entries(
+                page,
+                race_url=url,
+                race_uid=race_uid,
+                course_uid=course_uid,
+                course=_course_display(slug),
+                race_date=on,
+                target_uids=uids,
             )
+            hits.extend(page_hits)
+            if page_off is not None:
+                off_times[race_uid] = page_off
         except Exception as exc:  # noqa: BLE001
             log.warning("RP racecard parse failed (%s): %s", url, exc)
-    return hits
+    return hits, off_times
