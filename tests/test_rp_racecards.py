@@ -55,7 +55,7 @@ def test_parse_racecards_index_respects_date_filter():
 
 def test_parse_racecard_page_entries_matches_target_uid():
     """Efsixteen (uid 9175073) is a confirmed runner in Newmarket 4:10."""
-    hits = rp_racecards.parse_racecard_page_entries(
+    hits, off_time = rp_racecards.parse_racecard_page_entries(
         _read("racecards_race.html"),
         race_url="https://www.racingpost.com/racecards/38/newmarket/2026-05-03/916544",
         race_uid="916544",
@@ -70,6 +70,7 @@ def test_parse_racecard_page_entries_matches_target_uid():
     assert h.horse_slug == "efsixteen"
     assert "Efsixteen" in h.horse_name
     assert h.off_time == time(16, 10)
+    assert off_time == time(16, 10)
     assert "Tattersalls" in h.race_name or "Novice" in h.race_name
     assert h.course == "Newmarket"
     assert h.race_uid == "916544"
@@ -84,7 +85,7 @@ def test_parse_racecard_page_entries_does_not_false_match_pedigree_links():
     is the data-ugc-runnerid attribute. Asking for the sire's uid should
     return zero hits — it isn't a runner here.
     """
-    hits = rp_racecards.parse_racecard_page_entries(
+    hits, _ = rp_racecards.parse_racecard_page_entries(
         _read("racecards_race.html"),
         race_url="x",
         race_uid="916544",
@@ -96,8 +97,11 @@ def test_parse_racecard_page_entries_does_not_false_match_pedigree_links():
     assert hits == []
 
 
-def test_parse_racecard_page_entries_empty_target_short_circuits():
-    assert rp_racecards.parse_racecard_page_entries(
+def test_parse_racecard_page_entries_returns_off_time_with_empty_targets():
+    """Even with no target uids, the page off-time must be returned so the
+    morning email can backfill race times for catalogue-side entries whose
+    horse_uid wasn't matched on any racecard."""
+    hits, off_time = rp_racecards.parse_racecard_page_entries(
         _read("racecards_race.html"),
         race_url="x",
         race_uid="916544",
@@ -105,4 +109,6 @@ def test_parse_racecard_page_entries_empty_target_short_circuits():
         course="Newmarket",
         race_date=date(2026, 5, 3),
         target_uids=set(),
-    ) == []
+    )
+    assert hits == []
+    assert off_time == time(16, 10)
