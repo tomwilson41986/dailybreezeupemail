@@ -109,6 +109,48 @@ def _fmt_card(row: dict[str, Any], *, ran: bool) -> list[str]:
     return lines
 
 
+def _fmt_pct(x: float) -> str:
+    return f"{x * 100:.0f}%"
+
+
+def _fmt_rpr(x: float | None) -> str:
+    return f"{x:.0f}" if x is not None else "—"
+
+
+def _fmt_band_table(title: str, rows: list[Any]) -> list[str]:
+    out = [title, f"  {'Band':<8} {'n':>4} {'W':>4} {'SR':>5} {'avgRPR':>7}"]
+    for r in rows:
+        flag = "  *" if r.low_n else "   "
+        out.append(
+            f"{flag}{r.label:<8} {r.n_runners:>4} {r.n_winners:>4} "
+            f"{_fmt_pct(r.strike_rate):>5} {_fmt_rpr(r.avg_rpr):>7}"
+        )
+    return out
+
+
+def _fmt_sale_table(rows: list[Any]) -> list[str]:
+    out = ["BY SALE", f"  {'Sale':<28} {'n':>4} {'W':>4} {'SR':>5} {'avgRPR':>7}"]
+    for r in rows:
+        flag = "  *" if r.low_n else "   "
+        out.append(
+            f"{flag}{r.sale_label[:28]:<28} {r.n_runners:>4} {r.n_winners:>4} "
+            f"{_fmt_pct(r.strike_rate):>5} {_fmt_rpr(r.avg_rpr):>7}"
+        )
+    return out
+
+
+def _fmt_top_table(title: str, rows: list[Any]) -> list[str]:
+    out = [title, f"  {'Rating':>6} {'Horse':<26} {'Sale':<14} {'Status':<10} {'pkRPR':>6}"]
+    for r in rows:
+        rating = f"{r.rating:.1f}" if r.rating is not None else "—"
+        out.append(
+            f"  {rating:>6} {(r.horse_name or '')[:26]:<26} "
+            f"{(r.sale_label or '')[:14]:<14} {r.status_label:<10} "
+            f"{_fmt_rpr(r.peak_rpr):>6}"
+        )
+    return out
+
+
 def _render_text(
     *,
     run_date: date,
@@ -118,6 +160,7 @@ def _render_text(
     total: int,
     diagnostics: dict[str, Any],
     mode: str,
+    season_summary: dict[str, Any] | None = None,
 ) -> str:
     plural = "" if total == 1 else "s"
     parts: list[str] = [
@@ -133,6 +176,43 @@ def _render_text(
                 parts.append("")
         else:
             parts.append("No Results Today")
+        if season_summary:
+            parts.append("")
+            parts.append(
+                f"═══ SEASON TO DATE · {run_date.year} · "
+                f"{season_summary['total_runs']} runs ═══"
+            )
+            if season_summary["by_breeze_band"]:
+                parts.append("")
+                parts.extend(
+                    _fmt_band_table("FORM BY BREEZE RATING", season_summary["by_breeze_band"])
+                )
+            if season_summary["by_precocity_band"]:
+                parts.append("")
+                parts.extend(
+                    _fmt_band_table(
+                        "FORM BY PRECOCITY RATING", season_summary["by_precocity_band"]
+                    )
+                )
+            if season_summary["by_sale"]:
+                parts.append("")
+                parts.extend(_fmt_sale_table(season_summary["by_sale"]))
+            if season_summary["top_breeze"]:
+                parts.append("")
+                parts.extend(
+                    _fmt_top_table("TOP 10 BY BREEZE RATING", season_summary["top_breeze"])
+                )
+            if season_summary["top_precocity"]:
+                parts.append("")
+                parts.extend(
+                    _fmt_top_table(
+                        "TOP 10 BY PRECOCITY RATING", season_summary["top_precocity"]
+                    )
+                )
+            parts.append("")
+            parts.append(
+                f"  * = small sample (n<{season_summary['low_n_threshold']})"
+            )
     else:  # morning
         if entered:
             win_plural = "" if entries_window_days == 1 else "S"
@@ -163,6 +243,7 @@ def render(
     entries_window_days: int = 3,
     diagnostics: dict[str, Any] | None = None,
     mode: str = "morning",
+    season_summary: dict[str, Any] | None = None,
 ) -> EmailPayload:
     diagnostics = diagnostics or {}
     if mode not in ("morning", "evening"):
@@ -194,6 +275,7 @@ def render(
         "subject": subject,
         "diagnostics": diagnostics,
         "mode": mode,
+        "season_summary": season_summary if mode == "evening" else None,
     }
     html = env.get_template("email.html.j2").render(**context)
     text = _render_text(
@@ -204,6 +286,7 @@ def render(
         total=total,
         diagnostics=diagnostics,
         mode=mode,
+        season_summary=season_summary if mode == "evening" else None,
     )
     return EmailPayload(subject=subject, html=html, text=text)
 

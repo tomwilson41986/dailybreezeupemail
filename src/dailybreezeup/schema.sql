@@ -21,3 +21,38 @@ CREATE TABLE IF NOT EXISTS run_log (
     status       TEXT,
     summary_json TEXT
 );
+
+-- One row per (lot, race) outing. Feeds the season-to-date summary block
+-- at the bottom of the evening results email: form by breeze band, by
+-- precocity band, by sale, plus the top-10 leaderboards.
+--
+-- Backfilled on first run from email_log.payload_json so the table is
+-- populated immediately. Upserted from each evening run thereafter — the
+-- (lot_id, race_uid) primary key makes re-runs idempotent.
+--
+-- rpr is nullable: backfilled rows predate RPR scraping, and some runners
+-- (non-finishers) have no RPR even in fresh scrapes. Aggregations skip
+-- nulls when averaging.
+CREATE TABLE IF NOT EXISTS results_archive (
+    lot_id                  TEXT NOT NULL,
+    race_uid                TEXT NOT NULL,
+    horse_uid               INTEGER,
+    horse_name              TEXT,
+    sale_year               INTEGER NOT NULL,
+    sale_short              TEXT,
+    sale_name               TEXT,
+    lot_no                  INTEGER,
+    race_date               TEXT NOT NULL,
+    course                  TEXT,
+    off_time                TEXT,
+    race_name               TEXT,
+    finishing_position      TEXT,
+    total_runners           INTEGER,
+    sp                      TEXT,
+    rpr                     INTEGER,
+    sheet_breeze_rating     REAL,
+    sheet_precocity_rating  REAL,
+    recorded_at             TEXT NOT NULL,
+    PRIMARY KEY (lot_id, race_uid)
+);
+CREATE INDEX IF NOT EXISTS idx_results_archive_year ON results_archive(sale_year);
