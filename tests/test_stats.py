@@ -38,12 +38,18 @@ def _row(**over):
     "rating,expected",
     [
         (None, "unrated"),
-        (89.9, "70–89"),
-        (90.0, "≥90"),
-        (90.1, "≥90"),
-        (70.0, "70–89"),
-        (69.9, "50–69"),
-        (50.0, "50–69"),
+        (120.0, "≥100"),
+        (100.0, "≥100"),
+        (99.9, "90–99"),
+        (90.0, "90–99"),
+        (89.9, "80–89"),
+        (80.0, "80–89"),
+        (79.9, "70–79"),
+        (70.0, "70–79"),
+        (69.9, "60–69"),
+        (60.0, "60–69"),
+        (59.9, "50–59"),
+        (50.0, "50–59"),
         (49.9, "<50"),
         (0.0, "<50"),
     ],
@@ -54,7 +60,7 @@ def test_band_for_thresholds(rating, expected):
 
 def test_aggregate_by_band_counts_runners_winners_and_avg_rpr():
     rows = [
-        _row(sheet_breeze_rating=92.0, finishing_position="1", rpr=85),
+        _row(sheet_breeze_rating=102.0, finishing_position="1", rpr=85),
         _row(sheet_breeze_rating=91.0, finishing_position="3", rpr=75),
         _row(sheet_breeze_rating=80.0, finishing_position="2", rpr=70),
         _row(sheet_breeze_rating=80.0, finishing_position="5", rpr=None),
@@ -62,21 +68,24 @@ def test_aggregate_by_band_counts_runners_winners_and_avg_rpr():
     ]
     bands = stats.aggregate_by_band(rows, "sheet_breeze_rating")
     by_label = {b.label: b for b in bands}
-    assert set(by_label) == {"≥90", "70–89", "unrated"}
-    assert by_label["≥90"].n_runners == 2
-    assert by_label["≥90"].n_winners == 1
-    assert by_label["≥90"].strike_rate == pytest.approx(0.5)
-    assert by_label["≥90"].avg_rpr == pytest.approx(80.0)
-    # 70–89 band: 2 runners (one with no RPR), 0 wins; avg RPR skips the None
-    assert by_label["70–89"].n_runners == 2
-    assert by_label["70–89"].n_winners == 0
-    assert by_label["70–89"].avg_rpr == pytest.approx(70.0)
+    assert set(by_label) == {"≥100", "90–99", "80–89", "unrated"}
+    assert by_label["≥100"].n_runners == 1
+    assert by_label["≥100"].n_winners == 1
+    assert by_label["≥100"].strike_rate == pytest.approx(1.0)
+    assert by_label["≥100"].avg_rpr == pytest.approx(85.0)
+    assert by_label["90–99"].n_runners == 1
+    assert by_label["90–99"].n_winners == 0
+    # 80–89 band: 2 runners (one with no RPR), 0 wins; avg RPR skips the None
+    assert by_label["80–89"].n_runners == 2
+    assert by_label["80–89"].n_winners == 0
+    assert by_label["80–89"].avg_rpr == pytest.approx(70.0)
     assert by_label["unrated"].n_winners == 1
 
 
 def test_aggregate_by_band_marks_low_n_below_threshold():
     rows = [_row(sheet_breeze_rating=92.0)]
     [band] = stats.aggregate_by_band(rows, "sheet_breeze_rating")
+    assert band.label == "90–99"
     assert band.n_runners == 1
     assert band.low_n is True
 
@@ -84,6 +93,7 @@ def test_aggregate_by_band_marks_low_n_below_threshold():
 def test_aggregate_by_band_clears_low_n_above_threshold():
     rows = [_row(sheet_breeze_rating=92.0) for _ in range(stats.LOW_N_THRESHOLD)]
     [band] = stats.aggregate_by_band(rows, "sheet_breeze_rating")
+    assert band.label == "90–99"
     assert band.n_runners == stats.LOW_N_THRESHOLD
     assert band.low_n is False
 

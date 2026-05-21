@@ -487,6 +487,72 @@ def run(
     return 0 if status in ("ok", "dry_run") else 1
 
 
+def backfill_results(*, from_date: date, to_date: date | None = None) -> int:
+    """Scrape RP results for every date in ``[from_date, to_date]`` and write
+    matching breeze-up graduate outcomes to ``results_archive``.
+
+    Doesn't send email or touch ``email_log``. The cron's evening run handles
+    the live email; this command exists to recover historical data after the
+    SQLite DB has been wiped (e.g. ephemeral CI runners with no cache).
+    Re-running is safe — the archive upsert is idempotent on (lot_id, race_uid).
+    """
+    settings: Settings = load_settings()
+    to_date = to_date or datetime.now(UK).date()
+    if from_date > to_date:
+        raise ValueError(f"--backfill-from {from_date} is after to-date {to_date}")
+    log.info("Historical backfill: %s .. %s", from_date, to_date)
+
+    with session(settings.db_path) as conn:
+        log.info("Discovering breeze-up sales for %d", to_date.year)
+        sales = rp_sales.discover_sales(to_date.year)
+        log.info("Sales found: %d", len(sales))
+        all_lots: list[rp_sales.SaleLot] = []
+        for sale in sales:
+            lots = rp_sales.fetch_lots(sale)
+            log.info("  %s: %d lots", sale.sale_name, len(lots))
+            all_lots.extend(lots)
+        by_uid: dict[int, rp_sales.SaleLot] = {
+            lot.horse_uid: lot for lot in all_lots if lot.horse_uid is not None
+        }
+        uids = set(by_uid.keys())
+        log.info("Horse uids in scope: %d", len(uids))
+        if not uids:
+            log.warning("No uids — nothing to backfill")
+            return 0
+
+        sheet_index: dict[tuple[int, str, int], sheet_mod.SheetRow] = {}
+        sale_totals: dict[tuple[int, str], int] = {}
+        try:
+            sheet_rows = sheet_mod.fetch_sheet(settings.sheet_csv_url)
+            sheet_index = sheet_mod.index_by_key(sheet_rows)
+            sale_totals = sheet_mod.count_by_sale(sheet_rows)
+            log.info("Sheet rows loaded: %d", len(sheet_rows))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Sheet fetch failed (%s): proceeding without enrichment", exc)
+
+        total_hits = 0
+        day = from_date
+        while day <= to_date:
+            try:
+                hits = rp_results.fetch_hits_for_uids(day, uids)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("results fetch failed for %s: %s", day, exc)
+                hits = []
+            log.info("%s: %d result hit(s)", day, len(hits))
+            for hit in hits:
+                lot = by_uid.get(hit.horse_uid)
+                if lot is None:
+                    continue
+                row = _ran_row(lot, hit)
+                if sheet_index:
+                    _enrich_with_sheet([row], sheet_index, sale_totals)
+                upsert_result_row(conn, row)
+                total_hits += 1
+            day += timedelta(days=1)
+        log.info("Backfill complete: %d outcome(s) written to results_archive", total_hits)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="breezeup-daily")
     ap.add_argument("--date", type=date.fromisoformat, default=None,
@@ -498,6 +564,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--mode", choices=("morning", "evening"), default=None,
                     help="morning = entries/declarations only; evening = results only "
                          "(default: morning before 14:00 UK, evening after)")
+    ap.add_argument("--backfill-from", type=date.fromisoformat, default=None,
+                    metavar="YYYY-MM-DD",
+                    help="One-shot historical scrape: walk RP results from this date "
+                         "through today and write matching outcomes to results_archive. "
+                         "Doesn't send email. Use to seed the season-to-date table on "
+                         "a fresh DB (e.g. after a CI cache eviction).")
     ap.add_argument("-v", "--verbose", action="count", default=0)
     args = ap.parse_args(argv)
 
@@ -505,6 +577,8 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    if args.backfill_from is not None:
+        return backfill_results(from_date=args.backfill_from, to_date=args.date)
     return run(
         run_date=args.date, dry_run=args.dry_run, no_send=args.no_send, demo=args.demo,
         mode=args.mode,
