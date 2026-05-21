@@ -17,7 +17,16 @@ from typing import Any
 
 LOW_N_THRESHOLD = 10
 
-BANDS: tuple[str, ...] = ("≥90", "70–89", "50–69", "<50", "unrated")
+BANDS: tuple[str, ...] = (
+    "≥100",
+    "90–99",
+    "80–89",
+    "70–79",
+    "60–69",
+    "50–59",
+    "<50",
+    "unrated",
+)
 
 _PLACED_POSITIONS = frozenset({"2", "3"})
 
@@ -61,12 +70,18 @@ class HorseSummary:
 def band_for(rating: float | None) -> str:
     if rating is None:
         return "unrated"
+    if rating >= 100:
+        return "≥100"
     if rating >= 90:
-        return "≥90"
+        return "90–99"
+    if rating >= 80:
+        return "80–89"
     if rating >= 70:
-        return "70–89"
+        return "70–79"
+    if rating >= 60:
+        return "60–69"
     if rating >= 50:
-        return "50–69"
+        return "50–59"
     return "<50"
 
 

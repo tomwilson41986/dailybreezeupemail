@@ -46,6 +46,10 @@ on:
       notify_on_empty:
         description: "Send 'no horses today' email if total=0. Blank = use repo default. Type 'true' or 'false'."
         required: false
+      backfill_from:
+        description: "One-shot historical scrape: walk RP results from this YYYY-MM-DD through today and write to results_archive. Doesn't send email."
+        required: false
+        default: ""
 
 jobs:
   send:
@@ -85,13 +89,33 @@ jobs:
       - name: Install
         run: pip install -e .
 
+      # Persist the SQLite DB (email_log + results_archive) across runs so
+      # the season-to-date summary at the bottom of the evening email
+      # accumulates instead of resetting on every ephemeral runner. Cache
+      # key is unique per run so we always save a fresh snapshot; the
+      # restore-keys prefix means we always pull the most recent save.
+      - name: Restore DB cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/breezeup.sqlite
+            data/breezeup.sqlite-shm
+            data/breezeup.sqlite-wal
+          key: breezeup-db-v1-${{ github.run_id }}
+          restore-keys: |
+            breezeup-db-v1-
+
       - name: Run daily job
         run: |
-          args="--mode ${RUN_MODE}"
-          if [ -n "${{ github.event.inputs.date }}" ]; then args="$args --date ${{ github.event.inputs.date }}"; fi
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then args="$args --dry-run"; fi
-          if [ "${{ github.event.inputs.demo }}" = "true" ]; then args="$args --demo"; fi
-          python -m dailybreezeup.daily $args
+          if [ -n "${{ github.event.inputs.backfill_from }}" ]; then
+            python -m dailybreezeup.daily --backfill-from "${{ github.event.inputs.backfill_from }}"
+          else
+            args="--mode ${RUN_MODE}"
+            if [ -n "${{ github.event.inputs.date }}" ]; then args="$args --date ${{ github.event.inputs.date }}"; fi
+            if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then args="$args --dry-run"; fi
+            if [ "${{ github.event.inputs.demo }}" = "true" ]; then args="$args --demo"; fi
+            python -m dailybreezeup.daily $args
+          fi
 
       - name: Job summary
         if: always()

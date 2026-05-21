@@ -238,13 +238,13 @@ def _season_summary(**over):
         "total_runs": 12,
         "low_n_threshold": 10,
         "by_breeze_band": [
-            BandStat("≥90", n_runners=12, n_winners=3, strike_rate=0.25,
+            BandStat("≥100", n_runners=12, n_winners=3, strike_rate=0.25,
                      avg_rpr=78.5, low_n=False),
-            BandStat("70–89", n_runners=4, n_winners=0, strike_rate=0.0,
+            BandStat("70–79", n_runners=4, n_winners=0, strike_rate=0.0,
                      avg_rpr=65.0, low_n=True),
         ],
         "by_precocity_band": [
-            BandStat("≥90", n_runners=6, n_winners=2, strike_rate=0.333,
+            BandStat("≥100", n_runners=6, n_winners=2, strike_rate=0.333,
                      avg_rpr=80.0, low_n=True),
         ],
         "by_sale": [
@@ -289,7 +289,7 @@ def test_evening_renders_season_summary_in_html_and_text():
     # Per-band table content
     assert "Form by Breeze rating" in p.html
     assert "FORM BY BREEZE RATING" in p.text
-    assert "≥90" in p.html
+    assert "≥100" in p.html
     assert "25%" in p.html
     # Per-sale table
     assert "Form by Sale" in p.html
