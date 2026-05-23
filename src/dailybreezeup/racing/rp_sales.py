@@ -50,6 +50,14 @@ _SALE_RECORD_RE = re.compile(
 
 # Names that should count as "breeze-up" for our purposes.
 _BREEZE_NAME = re.compile(r"breeze.?up", re.IGNORECASE)
+# Tattersalls' Guineas Horses-in-Training Sale runs the day after Craven and
+# contains the unsold/withdrawn breeze-up 2yos under Tatts' internal
+# ``cat/breezeup2/`` catalogue. The sale also contains older HIT lots which
+# are not breeze-up grads, so callers filter the fetched lots to age=2 — see
+# ``_is_hit_sale``.
+_TATTS_GUINEAS_HIT_NAME = re.compile(
+    r"tattersalls\s+guineas\b.*\bhorses[\s-]in[\s-]training", re.IGNORECASE
+)
 
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -99,10 +107,11 @@ _XHR_HEADERS = {
 # they only need to match the URL path the data.json endpoint expects.
 _BREEZE_UP_FALLBACK: dict[int, list[tuple[int, str, str, str, str]]] = {
     2026: [
-        (5,  "2026-04-14", "2026-04-15", "Tattersalls Craven Breeze Up Sale 2026", "Tattersalls"),
-        (44, "2026-04-22", "2026-04-22", "Goffs UK 2yo Breeze Up Sale 2026",        "Goffs UK"),
-        (36, "2026-05-09", "2026-05-09", "Arqana May 2yo Breeze Up 2026",           "Arqana"),
-        (4,  "2026-05-22", "2026-05-22", "Tattersalls Ireland Breeze Up Sale 2026", "Tattersalls Ireland"),
+        (5,  "2026-04-14", "2026-04-15", "Tattersalls Craven Breeze Up Sale 2026",            "Tattersalls"),
+        (44, "2026-04-22", "2026-04-22", "Goffs UK 2yo Breeze Up Sale 2026",                  "Goffs UK"),
+        (5,  "2026-04-30", "2026-04-30", "Tattersalls Guineas Horses-in-Training Sale 2026",  "Tattersalls"),
+        (36, "2026-05-09", "2026-05-09", "Arqana May 2yo Breeze Up 2026",                     "Arqana"),
+        (4,  "2026-05-22", "2026-05-22", "Tattersalls Ireland Breeze Up Sale 2026",           "Tattersalls Ireland"),
     ],
 }
 
@@ -193,8 +202,23 @@ def parse_catalogues_index_html(html_text: str) -> list[Sale]:
 
 
 def filter_breeze_ups(sales: Iterable[Sale], year: int) -> list[Sale]:
-    """Keep only breeze-up sales within the given calendar year."""
-    return [s for s in sales if s.sale_date.year == year and _BREEZE_NAME.search(s.sale_name)]
+    """Keep sales worth scraping for breeze-up graduates in ``year``.
+
+    Matches dedicated breeze-up sales by name, plus the Tattersalls Guineas
+    Horses-in-Training Sale (which carries the unsold-at-Craven 2yos under
+    Tatts' internal ``breezeup2`` catalogue). The Guineas HIT also contains
+    older HIT lots; ``fetch_lots`` filters those out via ``_is_hit_sale``.
+    """
+    return [
+        s for s in sales
+        if s.sale_date.year == year
+        and (_BREEZE_NAME.search(s.sale_name) or _TATTS_GUINEAS_HIT_NAME.search(s.sale_name))
+    ]
+
+
+def _is_hit_sale(sale: Sale) -> bool:
+    """True for HIT/mixed sales where only the 2yo subset is breeze-up grads."""
+    return bool(_TATTS_GUINEAS_HIT_NAME.search(sale.sale_name))
 
 
 def _coerce_entry(raw: Any) -> EntryDetails | None:
@@ -453,7 +477,11 @@ def demo_lots() -> list[SaleLot]:
 
 
 def fetch_lots(sale: Sale, *, session: requests.Session | None = None, sleep: float = 0.8) -> list[SaleLot]:
-    """Paginate the data.json for a sale and return every lot."""
+    """Paginate the data.json for a sale and return every relevant lot.
+
+    For HIT sales (see :func:`_is_hit_sale`) only age-2 lots are kept — those
+    are the breeze-up portion; the older HIT lots aren't graduates.
+    """
     s = session or _make_session()
     # Warm-up: hit the HTML page first so the session carries the right cookies.
     try:
@@ -481,4 +509,8 @@ def fetch_lots(sale: Sale, *, session: requests.Session | None = None, sleep: fl
             break
         page = current + 1
         wall.sleep(sleep)
+    if _is_hit_sale(sale):
+        before = len(out)
+        out = [lot for lot in out if lot.age == 2]
+        log.info("  %s: HIT sale, kept %d/%d age-2 lots", sale.sale_name, len(out), before)
     return out

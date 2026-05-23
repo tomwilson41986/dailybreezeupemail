@@ -25,14 +25,16 @@ def _craven_sale() -> rp_sales.Sale:
 
 def test_parse_catalogues_index_extracts_sales():
     sales = rp_sales.parse_catalogues_index_html(_read("bloodstock_catalogues_index.html"))
-    # Ensure we found the four 2026 breeze-up sales we care about
+    # The four dedicated breeze-up sales plus the Tatts Guineas HIT (carries
+    # the unsold-at-Craven 2yos, filtered to age=2 by fetch_lots).
     breeze_2026 = rp_sales.filter_breeze_ups(sales, year=2026)
-    assert len(breeze_2026) == 4
-    by_uid = {s.venue_uid: s for s in breeze_2026}
-    assert 5 in by_uid and by_uid[5].sale_name.startswith("Tattersalls Craven")
-    assert 44 in by_uid and "Goffs UK" in by_uid[44].sale_name
-    assert 36 in by_uid and "Arqana" in by_uid[36].sale_name
-    assert 4 in by_uid and "Tattersalls Ireland" in by_uid[4].sale_name
+    by_uid_date = {(s.venue_uid, s.sale_date.isoformat()): s for s in breeze_2026}
+    assert (5, "2026-04-14") in by_uid_date and by_uid_date[(5, "2026-04-14")].sale_name.startswith("Tattersalls Craven")
+    assert (44, "2026-04-22") in by_uid_date and "Goffs UK" in by_uid_date[(44, "2026-04-22")].sale_name
+    assert (5, "2026-04-30") in by_uid_date and "Guineas Horses-in-Training" in by_uid_date[(5, "2026-04-30")].sale_name
+    assert (36, "2026-05-09") in by_uid_date and "Arqana" in by_uid_date[(36, "2026-05-09")].sale_name
+    assert (4, "2026-05-22") in by_uid_date and "Tattersalls Ireland" in by_uid_date[(4, "2026-05-22")].sale_name
+    assert len(breeze_2026) == 5
 
 
 def test_filter_breeze_ups_isolates_year_and_name():
@@ -120,12 +122,30 @@ def test_sale_urls_match_racing_post_shape():
 
 def test_fallback_sales_returns_known_2026_breezeups():
     """When the index page is blocked, the hardcoded fallback list keeps the
-    pipeline running for the four 2026 breeze-up sales we care about."""
+    pipeline running for the 2026 breeze-up sales we care about — including
+    the Tatts Guineas HIT which carries unsold-at-Craven 2yos."""
     sales = rp_sales._fallback_sales(2026)
-    by_uid = {s.venue_uid: s for s in sales}
-    assert set(by_uid) == {5, 44, 36, 4}
-    assert by_uid[5].sale_date == date(2026, 4, 14)
-    assert by_uid[5].sale_name.startswith("Tattersalls Craven")
+    by_uid_date = {(s.venue_uid, s.sale_date.isoformat()): s for s in sales}
+    assert (5, "2026-04-14") in by_uid_date
+    assert by_uid_date[(5, "2026-04-14")].sale_name.startswith("Tattersalls Craven")
+    assert (5, "2026-04-30") in by_uid_date
+    assert "Guineas Horses-in-Training" in by_uid_date[(5, "2026-04-30")].sale_name
+    assert (44, "2026-04-22") in by_uid_date
+    assert (36, "2026-05-09") in by_uid_date
+    assert (4, "2026-05-22") in by_uid_date
+
+
+def test_is_hit_sale_distinguishes_guineas_hit_from_pure_breezeups():
+    craven = _craven_sale()
+    guineas = rp_sales.Sale(
+        venue_uid=5,
+        sale_date=date(2026, 4, 30),
+        sale_end_date=date(2026, 4, 30),
+        sale_name="Tattersalls Guineas Horses-in-Training Sale 2026",
+        sale_co="Tattersalls",
+    )
+    assert rp_sales._is_hit_sale(craven) is False
+    assert rp_sales._is_hit_sale(guineas) is True
 
 
 def test_fallback_sales_unknown_year_returns_empty():

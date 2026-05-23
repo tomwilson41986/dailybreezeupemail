@@ -9,7 +9,7 @@ Source is Racing Post's bloodstock sale catalogue (the authoritative join betwee
 
 ## How it works
 
-1. **Discover sales**: fetch `https://www.racingpost.com/bloodstock/sales/catalogues/` and filter to sale records whose name matches `/breeze.?up/i` in the current calendar year. Typical 2026 set: Tattersalls Craven, Goffs UK 2yo Breeze Up, Arqana May 2yo Breeze Up, Tattersalls Ireland Breeze Up, Osarus Breeze-Up & HIT.
+1. **Discover sales**: fetch `https://www.racingpost.com/bloodstock/sales/catalogues/` and filter to sale records whose name matches `/breeze.?up/i` in the current calendar year, plus the Tattersalls Guineas Horses-in-Training Sale (which runs the day after Craven and re-offers the unsold-at-Craven 2yos under Tatts' internal `breezeup2` catalogue). The Guineas HIT also contains older HIT lots — `fetch_lots` filters those out, keeping only age-2 rows. Typical 2026 set: Tattersalls Craven, Goffs UK 2yo Breeze Up, Tattersalls Guineas Horses-in-Training (2yos only), Arqana May 2yo Breeze Up, Tattersalls Ireland Breeze Up, Osarus Breeze-Up & HIT.
 2. **Fetch lots per sale**: paginate `.../catalogues/<venue_uid>/<YYYY-MM-DD>/data.json`. Each row is one catalogued lot with an `entered` flag, a `horse_uid` (once RP has registered the horse), and an `entry_details` pointer to one race.
 3. **Classify**:
    - **Morning · Entered (next 3 days)**: union of two joins, deduped by `(lot_id, race_uid)`:
