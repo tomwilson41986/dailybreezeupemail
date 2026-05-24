@@ -128,6 +128,54 @@ def test_racecard_side_entry_wins_when_lot_matches_both_paths():
     assert entered[0]["horse_name"] == "Hot Havana"
 
 
+def test_guineas_and_arqana_entered_lots_surface_via_entry_details():
+    """Guineas HIT and Arqana grads reach the morning email through the
+    catalogue's entry_details path — no horse_uid or racecard match required.
+    Arqana in particular barely populates horse_uid, so the entry_details
+    fallback is the only thing that surfaces its declared runners."""
+    today = date(2026, 5, 23)
+
+    def _sale_lot(sale, *, lot_no, horse_uid, name, entry):
+        return rp_sales.SaleLot(
+            sale=sale, lot_no=lot_no, lot_letter="",
+            horse_uid=horse_uid, horse_name=name,
+            sire_uid=None, sire_name="Sire", dam_uid=None, dam_name="Dam",
+            sire_of_dam_name="", sex="F", age=2, year_foaled=2024,
+            seller="", price_label=None, buyer=None,
+            entered=True, entry=entry,
+        )
+
+    guineas = rp_sales.Sale(
+        venue_uid=5, sale_date=date(2026, 4, 30), sale_end_date=date(2026, 4, 30),
+        sale_name="Tattersalls Guineas Horses-in-Training Sale 2026", sale_co="Tattersalls",
+    )
+    arqana = rp_sales.Sale(
+        venue_uid=36, sale_date=date(2026, 5, 9), sale_end_date=date(2026, 5, 9),
+        sale_name="Arqana May 2yo Breeze Up 2026", sale_co="Arqana",
+    )
+    my_maria = _sale_lot(
+        guineas, lot_no=176, horse_uid=9281137, name="My Maria",
+        entry=rp_sales.EntryDetails(
+            course_uid=47, course_name="REDCAR",
+            race_date=date(2026, 5, 25), race_uid=918936),
+    )
+    # Arqana lot with NO horse_uid — only entry_details links it to a race.
+    byzantine = _sale_lot(
+        arqana, lot_no=47, horse_uid=None, name="Byzantine",
+        entry=rp_sales.EntryDetails(
+            course_uid=104, course_name="YARMOUTH",
+            race_date=date(2026, 5, 25), race_uid=918989),
+    )
+
+    entered, _ran = daily._classify(
+        today, [my_maria, byzantine], results=[], racecard_entries=[],
+        entries_window_days=3,
+    )
+    surfaced = {(r["sale_co"], r["horse_name"]) for r in entered}
+    assert ("Tattersalls", "My Maria") in surfaced
+    assert ("Arqana", "Byzantine") in surfaced
+
+
 # ── Historical backfill CLI ────────────────────────────────────────────────
 
 
