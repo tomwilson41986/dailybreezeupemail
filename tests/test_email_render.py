@@ -135,6 +135,15 @@ def test_render_embeds_silk_cid_when_silk_url_present():
     assert f'src="cid:{row["silk_cid"]}"' in p.html
 
 
+def test_morning_embeds_silk_cid_for_entered_row():
+    row = _entered_row(silk_url="https://www.rp-assets.com/svg/d/1/5/361251d.svg")
+    p = render(
+        run_date=date(2026, 4, 24), entered=[row], ran_today=[], mode="morning",
+    )
+    assert row.get("silk_cid")
+    assert f'src="cid:{row["silk_cid"]}"' in p.html
+
+
 def test_render_skips_silk_when_url_missing():
     row = _ran_row()
     p = render(
