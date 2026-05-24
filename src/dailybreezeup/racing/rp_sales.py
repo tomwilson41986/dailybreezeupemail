@@ -257,10 +257,11 @@ def parse_lots_page(body: str, sale: Sale) -> tuple[list[SaleLot], int, int]:
         if lot_no is None:
             continue
         horse_name = (row.get("horse_style_name") or "").strip()
-        # RP uses "00<dam-name>" as an internal sort key for unnamed horses.
-        # Strip it so downstream display code gets an empty string instead
-        # of rendering a misleading pseudo-name.
-        if horse_name.lower().startswith("00"):
+        # Sale feeds use placeholders for not-yet-named lots: Tatts/Goffs emit
+        # "00<dam-name>" as an internal sort key, Arqana emits the literal
+        # "Unnamed". Blank both so downstream display falls back to "Lot N"
+        # instead of rendering a misleading pseudo-name.
+        if horse_name.lower().startswith("00") or horse_name.lower() == "unnamed":
             horse_name = ""
         lots.append(
             SaleLot(

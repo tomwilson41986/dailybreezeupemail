@@ -85,6 +85,31 @@ def test_parse_lots_page_blanks_pseudo_name_for_unnamed_lots():
     assert lot16.horse_name == ""
 
 
+def test_parse_lots_page_blanks_arqana_unnamed_placeholder():
+    """Arqana's feed uses the literal string "Unnamed" for not-yet-named lots
+    (vs Tatts/Goffs' "00<dam>" sort key). Both must blank to "" so the email
+    falls back to "Lot N" rather than printing "Unnamed"."""
+    sale = rp_sales.Sale(
+        venue_uid=36,
+        sale_date=date(2026, 5, 9),
+        sale_end_date=date(2026, 5, 9),
+        sale_name="Arqana May 2yo Breeze Up 2026",
+        sale_co="Arqana",
+    )
+    body = (
+        '{"rows": ['
+        '{"lot_no": 1, "horse_style_name": "Unnamed", "horse_age": 2, "entered": false},'
+        '{"lot_no": 2, "horse_style_name": "UNNAMED", "horse_age": 2, "entered": false},'
+        '{"lot_no": 47, "horse_style_name": "Byzantine", "horse_age": 2, "entered": true}'
+        '], "pagination": {"currentPage": 1, "totalPages": 1}}'
+    )
+    lots, _, _ = rp_sales.parse_lots_page(body, sale)
+    by_lot = {lot.lot_no: lot for lot in lots}
+    assert by_lot[1].horse_name == ""
+    assert by_lot[2].horse_name == ""
+    assert by_lot[47].horse_name == "Byzantine"
+
+
 def test_parse_lots_page_all_pages_total_182():
     sale = _craven_sale()
     total_lots: list[rp_sales.SaleLot] = []
