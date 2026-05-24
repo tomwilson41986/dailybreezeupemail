@@ -13,15 +13,15 @@ window and uid-join them against our catalogue lots.
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time as wall
 from dataclasses import dataclass
 from datetime import date, time
-from typing import Iterable
+from typing import Any, Iterable
 
 import requests
-from lxml import html as lxml_html
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 log = logging.getLogger(__name__)
@@ -58,6 +58,9 @@ _RACECARD_PATH_RE = re.compile(
 )
 _PROFILE_RE = re.compile(r"/profile/horse/(\d+)/([a-z0-9-]+)")
 _TIME_RE = re.compile(r"(\d{1,2})[:.](\d{2})")
+_NEXT_DATA_RE = re.compile(
+    r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', re.S
+)
 
 
 @dataclass(frozen=True)
@@ -80,18 +83,34 @@ def _course_display(slug: str) -> str:
 
 
 def _parse_off_time(s: str) -> time | None:
-    """Parse an off time from a title string or RC-courseHeader__time text.
-    UK racecards use 12h clock without am/pm; 1..10 are PM, 11/12 are AM,
-    matching the rp_results convention."""
+    """Parse an off time from RP's ``race.startTime`` field, which is a
+    literal 24h ``HH:MM`` string (e.g. ``"14:08"``, ``"20:45"``)."""
     m = _TIME_RE.search(s or "")
     if not m:
         return None
     hh, mm = int(m.group(1)), int(m.group(2))
     if not (0 <= hh <= 23 and 0 <= mm <= 59):
         return None
-    if 1 <= hh <= 10:
-        hh += 12
     return time(hh, mm)
+
+
+def _extract_next_data(html_text: str) -> dict[str, Any] | None:
+    """Pull the ``__NEXT_DATA__`` JSON blob RP embeds in every racecard page.
+    Returns ``None`` if it's absent or not valid JSON."""
+    m = _NEXT_DATA_RE.search(html_text)
+    if not m:
+        return None
+    try:
+        return json.loads(m.group(1))
+    except (ValueError, TypeError):
+        return None
+
+
+def _race_page_data(data: dict[str, Any]) -> dict[str, Any] | None:
+    try:
+        return data["props"]["pageProps"]["initialState"]["racePage"]["data"]
+    except (KeyError, TypeError):
+        return None
 
 
 def parse_racecards_index_race_urls(
@@ -128,54 +147,43 @@ def parse_racecard_page_entries(
     """Scan a racecard page for runners whose uid is in ``target_uids``.
 
     Returns ``(matched_entries, page_off_time)``. The off_time is extracted
-    from the page header regardless of whether any uid matched, so callers
-    can build a race_uid → off_time map covering every race scanned (the
-    morning email uses this to attach race times to catalogue-side entries
-    whose horse_uid was not found in the racecard).
+    regardless of whether any uid matched, so callers can build a
+    race_uid → off_time map covering every race scanned (the morning email
+    uses this to attach race times to catalogue-side entries whose horse_uid
+    was not found in the racecard).
 
-    Each runner is a node tagged with ``data-ugc-runnerid="<horse_uid>"``.
-    That attribute is the authoritative join key — anchors inside the row
-    also include sire/dam profile links, so we cannot rely on
-    /profile/horse/<uid> matches alone.
+    Racing Post serves racecards as a Next.js app: runner and race data live
+    in the ``__NEXT_DATA__`` JSON blob (``racePage.data``), not in scrapeable
+    HTML. Each runner's ``horseId`` is the authoritative join key, and
+    ``silkImage`` carries the silk SVG URL.
     """
-    doc = lxml_html.fromstring(html_text)
+    data = _extract_next_data(html_text)
+    rp = _race_page_data(data) if data else None
+    if rp is None:
+        log.warning("racecard page missing __NEXT_DATA__ racePage data (%s)", race_url)
+        return [], None
 
-    title_nodes = doc.xpath("//title/text()")
-    off_time = _parse_off_time(title_nodes[0]) if title_nodes else None
-    if off_time is None:
-        time_nodes = doc.xpath('//*[contains(@class,"RC-courseHeader__time")]/text()')
-        if time_nodes:
-            off_time = _parse_off_time(time_nodes[0])
+    race = rp.get("race") or {}
+    off_time = _parse_off_time(race.get("startTime") or "")
+    race_name = (race.get("raceTitle") or "").strip()
 
     if not target_uids:
         return [], off_time
 
-    race_name_nodes = doc.xpath(
-        '//*[@data-test-selector="RC-header__raceInstanceTitle"]'
-    )
-    race_name = (
-        " ".join(race_name_nodes[0].text_content().split())
-        if race_name_nodes else ""
-    )
-
     hits: list[RacecardEntry] = []
-    for row in doc.xpath('//*[@data-ugc-runnerid]'):
+    for runner in rp.get("runners") or []:
         try:
-            uid = int(row.get("data-ugc-runnerid"))
+            uid = int(runner.get("horseId"))
         except (TypeError, ValueError):
             continue
         if uid not in target_uids:
             continue
         slug = ""
-        for href in row.xpath('.//a/@href'):
-            m = _PROFILE_RE.search(href)
-            if m and int(m.group(1)) == uid:
-                slug = m.group(2)
-                break
-        name_el = row.xpath('.//*[contains(@class,"RC-runnerName")]')
-        horse_name = " ".join(name_el[0].text_content().split()) if name_el else ""
-        silk_src = row.xpath('.//img[contains(@class,"RC-runnerJacket__image")]/@src')
-        silk_url = silk_src[0] if silk_src else None
+        m = _PROFILE_RE.search(runner.get("horseUrl") or "")
+        if m:
+            slug = m.group(2)
+        horse_name = (runner.get("horseName") or "").strip()
+        silk_url = runner.get("silkImage") or None
         hits.append(
             RacecardEntry(
                 horse_uid=uid,

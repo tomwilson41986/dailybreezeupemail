@@ -18,11 +18,12 @@ def _read(name: str) -> str:
 @pytest.mark.parametrize(
     "s,expected",
     [
-        ("4:10 Newmarket | Standard Racecard | 3 May 2026 | Racing Post", time(16, 10)),
-        ("11:30 Sandown | ...", time(11, 30)),
-        ("12:00 Sandown | ...", time(12, 0)),
-        ("8:45 Wolverhampton | ...", time(20, 45)),
-        ("4:10", time(16, 10)),
+        ("14:08", time(14, 8)),       # RP startTime is literal 24h
+        ("11:30", time(11, 30)),
+        ("12:00", time(12, 0)),
+        ("20:45", time(20, 45)),
+        ("9:30", time(9, 30)),
+        ("", None),
         ("nonsense", None),
     ],
 )
@@ -54,45 +55,56 @@ def test_parse_racecards_index_respects_date_filter():
 
 
 def test_parse_racecard_page_entries_matches_target_uid():
-    """Efsixteen (uid 9175073) is a confirmed runner in Newmarket 4:10."""
+    """Imperial Cult (uid 4552168) is a runner in the Windsor 14:08 fixture."""
     hits, off_time = rp_racecards.parse_racecard_page_entries(
         _read("racecards_race.html"),
-        race_url="https://www.racingpost.com/racecards/38/newmarket/2026-05-03/916544",
-        race_uid="916544",
-        course_uid=38,
-        course="Newmarket",
-        race_date=date(2026, 5, 3),
-        target_uids={9175073},
+        race_url="https://www.racingpost.com/racecards/93/windsor/2026-05-25/918919",
+        race_uid="918919",
+        course_uid=93,
+        course="Windsor",
+        race_date=date(2026, 5, 25),
+        target_uids={4552168},
     )
     assert len(hits) == 1
     h = hits[0]
-    assert h.horse_uid == 9175073
-    assert h.horse_slug == "efsixteen"
-    assert "Efsixteen" in h.horse_name
-    assert h.off_time == time(16, 10)
-    assert off_time == time(16, 10)
-    assert "Tattersalls" in h.race_name or "Novice" in h.race_name
-    assert h.course == "Newmarket"
-    assert h.race_uid == "916544"
-    assert h.silk_url == "https://www.rp-assets.com/svg/d/1/5/361251d.svg"
+    assert h.horse_uid == 4552168
+    assert h.horse_slug == "imperial-cult"
+    assert h.horse_name == "Imperial Cult"
+    assert h.off_time == time(14, 8)
+    assert off_time == time(14, 8)
+    assert h.race_name == "Fitzdares Handicap"
+    assert h.course == "Windsor"
+    assert h.race_uid == "918919"
+    assert h.silk_url == "https://www.rp-assets.com/svg/8/1/4/326418.svg"
 
 
-def test_parse_racecard_page_entries_does_not_false_match_pedigree_links():
-    """Sire/dam/damsire profile links must not be mistaken for runners.
-
-    Efsixteen's sire (1371798 Havana Grey) and dam (805506 Hot Secret) appear
-    inside the runner row as /profile/horse/<uid> links, but the runner uid
-    is the data-ugc-runnerid attribute. Asking for the sire's uid should
-    return zero hits — it isn't a runner here.
-    """
+def test_parse_racecard_page_entries_matches_multiple_uids():
+    """Several target uids in one race each yield a hit with their own silk."""
     hits, _ = rp_racecards.parse_racecard_page_entries(
         _read("racecards_race.html"),
         race_url="x",
-        race_uid="916544",
-        course_uid=38,
-        course="Newmarket",
-        race_date=date(2026, 5, 3),
-        target_uids={1371798},  # Havana Grey, the sire
+        race_uid="918919",
+        course_uid=93,
+        course="Windsor",
+        race_date=date(2026, 5, 25),
+        target_uids={4552168, 7457904},
+    )
+    by_uid = {h.horse_uid: h for h in hits}
+    assert set(by_uid) == {4552168, 7457904}
+    assert by_uid[7457904].horse_name == "Opera Wave"
+    assert by_uid[7457904].silk_url == "https://www.rp-assets.com/svg/9/3/0/343039.svg"
+
+
+def test_parse_racecard_page_entries_ignores_unknown_uid():
+    """A uid that is not one of the runners' horseId yields no hits."""
+    hits, _ = rp_racecards.parse_racecard_page_entries(
+        _read("racecards_race.html"),
+        race_url="x",
+        race_uid="918919",
+        course_uid=93,
+        course="Windsor",
+        race_date=date(2026, 5, 25),
+        target_uids={1371798},  # not a runner in this race
     )
     assert hits == []
 
@@ -104,11 +116,26 @@ def test_parse_racecard_page_entries_returns_off_time_with_empty_targets():
     hits, off_time = rp_racecards.parse_racecard_page_entries(
         _read("racecards_race.html"),
         race_url="x",
-        race_uid="916544",
-        course_uid=38,
-        course="Newmarket",
-        race_date=date(2026, 5, 3),
+        race_uid="918919",
+        course_uid=93,
+        course="Windsor",
+        race_date=date(2026, 5, 25),
         target_uids=set(),
     )
     assert hits == []
-    assert off_time == time(16, 10)
+    assert off_time == time(14, 8)
+
+
+def test_parse_racecard_page_entries_handles_missing_next_data():
+    """A page without the __NEXT_DATA__ blob degrades gracefully."""
+    hits, off_time = rp_racecards.parse_racecard_page_entries(
+        "<html><body>no json here</body></html>",
+        race_url="x",
+        race_uid="918919",
+        course_uid=93,
+        course="Windsor",
+        race_date=date(2026, 5, 25),
+        target_uids={4552168},
+    )
+    assert hits == []
+    assert off_time is None
