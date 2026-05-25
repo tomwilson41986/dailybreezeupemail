@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import date, time
 
 from dailybreezeup import daily
+from dailybreezeup import sheet as sheet_mod
 from dailybreezeup.config import Settings
 from dailybreezeup.racing import rp_racecards, rp_results, rp_sales
 
@@ -174,6 +175,38 @@ def test_guineas_and_arqana_entered_lots_surface_via_entry_details():
     surfaced = {(r["sale_co"], r["horse_name"]) for r in entered}
     assert ("Tattersalls", "My Maria") in surfaced
     assert ("Arqana", "Byzantine") in surfaced
+
+
+def test_guineas_lot_gets_sheet_ratings_via_sale_alias():
+    """A Guineas HIT lot must pick up its gSheet ratings. The sheet labels these
+    rows "Guineas", so sale_short_name has to resolve the verbose RP name to that
+    short label or _enrich_with_sheet skips the row (sale_short is None)."""
+    guineas = rp_sales.Sale(
+        venue_uid=5, sale_date=date(2026, 4, 30), sale_end_date=date(2026, 4, 30),
+        sale_name="Tattersalls Guineas Horses-in-Training Sale 2026", sale_co="Tattersalls",
+    )
+    lot = rp_sales.SaleLot(
+        sale=guineas, lot_no=176, lot_letter="",
+        horse_uid=9281137, horse_name="My Maria",
+        sire_uid=None, sire_name="Sire", dam_uid=None, dam_name="Dam",
+        sire_of_dam_name="", sex="F", age=2, year_foaled=2024,
+        seller="", price_label=None, buyer=None, entered=True, entry=None,
+    )
+    row = daily._lot_row(lot, race_uid=None)
+    assert row["sale_short"] == "Guineas"
+
+    sheet_row = sheet_mod.SheetRow(
+        year=2026, sale="Guineas", lot=176, sex="F", sire="Sire", dam="Dam",
+        vendor="", buyer="", price="", ot_diff_m=None, ot_rank=None,
+        sl_1f=None, sl_go=None, breeze_rating=99.5, precocity_rating=88.0,
+    )
+    index = sheet_mod.index_by_key([sheet_row])
+    matched, missing = daily._enrich_with_sheet([row], index)
+
+    assert (matched, missing) == (1, 0)
+    assert row["sheet_matched"] is True
+    assert row["sheet_breeze_rating"] == 99.5
+    assert row["sheet_precocity_rating"] == 88.0
 
 
 # ── Historical backfill CLI ────────────────────────────────────────────────

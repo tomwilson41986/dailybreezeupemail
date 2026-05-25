@@ -31,6 +31,11 @@ DEFAULT_SHEET_CSV_URL = (
 # Map RP's verbose sale name -> the short label used in the sheet's "Sale" column.
 # Keep this list in sync with whatever the user types into the sheet.
 _SALE_ALIASES: tuple[tuple[re.Pattern[str], str], ...] = (
+    # The Tatts Guineas Horses-in-Training Sale re-offers unsold-at-Craven 2yos
+    # under their own catalogue lot numbers; the gSheet labels these "Guineas".
+    # Must precede the "craven" rule — the verbose RP name contains neither, but
+    # keep this first so any future "...Craven...Guineas..." string maps here.
+    (re.compile(r"guineas", re.I), "Guineas"),
     (re.compile(r"craven", re.I), "Craven"),
     # The gSheet labels Goffs UK breeze-up rows as "Goffs" (no UK suffix), so
     # the short label here must match exactly for the (year, sale, lot) join.
