@@ -319,3 +319,86 @@ def test_backfill_results_idempotent_on_rerun(tmp_path, monkeypatch):
     n = conn.execute("SELECT COUNT(*) FROM results_archive").fetchone()[0]
     conn.close()
     assert n == 1
+
+
+# ── Season self-heal (evening auto-backfill) ───────────────────────────────
+
+
+def test_ensure_season_archive_walks_unscraped_days_and_marks_today(tmp_path, monkeypatch):
+    """The evening self-heal walks every result date from season_start up to
+    (but not including) today, writes matching outcomes, and records each
+    walked day plus today in results_scrape_log."""
+    from dailybreezeup import db
+
+    lot = _lot(horse_uid=1234, entry=None)
+    by_uid = {1234: lot}
+
+    walked: list[date] = []
+
+    def fake_fetch_hits(on, uids):
+        walked.append(on)
+        if on == date(2026, 4, 2):
+            return [_hit(1234, finishing_position="1", race_uid="555", race_date=on, rpr=90)]
+        return []
+
+    monkeypatch.setattr(daily.rp_results, "fetch_hits_for_uids", fake_fetch_hits)
+
+    conn = db.connect(tmp_path / "season.db")
+    db.migrate(conn)
+    fill = daily._ensure_season_archive(
+        conn,
+        season_start=date(2026, 4, 1),
+        today=date(2026, 4, 4),
+        by_uid=by_uid,
+        sheet_index={},
+        sale_totals={},
+    )
+
+    # Today (04-04) is covered by the live results fetch, so it's not walked.
+    assert walked == [date(2026, 4, 1), date(2026, 4, 2), date(2026, 4, 3)]
+    assert fill == {"days_scraped": 3, "rows_added": 1}
+
+    archived = conn.execute(
+        "SELECT race_uid, finishing_position FROM results_archive"
+    ).fetchall()
+    assert [(r["race_uid"], r["finishing_position"]) for r in archived] == [("555", "1")]
+
+    # Walked days plus today are all recorded so we never re-scrape them.
+    assert db.scraped_result_dates(conn) == {
+        "2026-04-01", "2026-04-02", "2026-04-03", "2026-04-04",
+    }
+    conn.close()
+
+
+def test_ensure_season_archive_skips_already_scraped_days(tmp_path, monkeypatch):
+    """Days already in results_scrape_log are never re-fetched — that's what
+    keeps the steady-state evening run cheap (only today gets scraped)."""
+    from dailybreezeup import db
+
+    lot = _lot(horse_uid=1234, entry=None)
+    by_uid = {1234: lot}
+
+    walked: list[date] = []
+    monkeypatch.setattr(
+        daily.rp_results, "fetch_hits_for_uids",
+        lambda on, uids: walked.append(on) or [],
+    )
+
+    conn = db.connect(tmp_path / "season.db")
+    db.migrate(conn)
+    for iso in ("2026-04-01", "2026-04-02"):
+        db.mark_result_date_scraped(conn, iso)
+
+    fill = daily._ensure_season_archive(
+        conn,
+        season_start=date(2026, 4, 1),
+        today=date(2026, 4, 4),
+        by_uid=by_uid,
+        sheet_index={},
+        sale_totals={},
+    )
+
+    # Only 04-03 was unscraped (04-01/04-02 pre-marked, 04-04 is today).
+    assert walked == [date(2026, 4, 3)]
+    assert fill["days_scraped"] == 1
+    conn.close()

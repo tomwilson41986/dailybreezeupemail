@@ -56,3 +56,13 @@ CREATE TABLE IF NOT EXISTS results_archive (
     PRIMARY KEY (lot_id, race_uid)
 );
 CREATE INDEX IF NOT EXISTS idx_results_archive_year ON results_archive(sale_year);
+
+-- One row per RP results date we've already walked for the season-to-date
+-- archive. A row means "this date has been scraped" regardless of whether any
+-- breeze-up graduate ran that day, so the evening run backfills each historical
+-- day exactly once instead of re-scraping the whole season every night. After a
+-- CI cache eviction the table comes back empty and the season self-heals.
+CREATE TABLE IF NOT EXISTS results_scrape_log (
+    result_date  TEXT PRIMARY KEY,
+    scraped_at   TEXT NOT NULL
+);

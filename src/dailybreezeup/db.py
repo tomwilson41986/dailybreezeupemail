@@ -125,6 +125,24 @@ def upsert_result_row(
     return True
 
 
+def scraped_result_dates(conn: sqlite3.Connection) -> set[str]:
+    """ISO dates already walked for the season archive (see results_scrape_log)."""
+    return {r[0] for r in conn.execute("SELECT result_date FROM results_scrape_log")}
+
+
+def mark_result_date_scraped(
+    conn: sqlite3.Connection,
+    day_iso: str,
+    *,
+    scraped_at: str | None = None,
+) -> None:
+    scraped_at = scraped_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
+    conn.execute(
+        "INSERT OR REPLACE INTO results_scrape_log (result_date, scraped_at) VALUES (?, ?)",
+        (day_iso, scraped_at),
+    )
+
+
 @contextmanager
 def session(db_path: Path) -> Iterator[sqlite3.Connection]:
     conn = connect(db_path)
