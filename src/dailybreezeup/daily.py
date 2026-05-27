@@ -24,7 +24,12 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from dailybreezeup.config import Settings, load as load_settings
-from dailybreezeup.db import session, upsert_result_row
+from dailybreezeup.db import (
+    mark_result_date_scraped,
+    scraped_result_dates,
+    session,
+    upsert_result_row,
+)
 from dailybreezeup.emailer import EmailPayload, render, send
 from dailybreezeup.racing import rp_racecards, rp_results, rp_sales
 from dailybreezeup import sheet as sheet_mod
@@ -431,6 +436,31 @@ def run(
         if mode == "evening" and not demo:
             for row in ran:
                 upsert_result_row(conn, row)
+            # Self-heal the archive back to the season start so graduates that
+            # ran before the results feature launched still show in the summary.
+            # Tracked per-day, so this only scrapes historical dates once (and
+            # re-fills after a cache eviction). Never let it block the email.
+            by_uid = {
+                lot.horse_uid: lot for lot in all_lots if lot.horse_uid is not None
+            }
+            try:
+                fill = _ensure_season_archive(
+                    conn,
+                    season_start=settings.season_start_date,
+                    today=today,
+                    by_uid=by_uid,
+                    sheet_index=sheet_index,
+                    sale_totals=sale_totals,
+                )
+                if fill["days_scraped"]:
+                    log.info(
+                        "season backfill: scraped %d historical day(s), +%d archive row(s)",
+                        fill["days_scraped"], fill["rows_added"],
+                    )
+                diagnostics["season_backfill_days"] = fill["days_scraped"]
+                diagnostics["season_backfill_rows"] = fill["rows_added"]
+            except Exception as exc:  # noqa: BLE001
+                log.warning("season backfill failed (%s): summary may be incomplete", exc)
 
         season_summary = None
         if mode == "evening":
@@ -487,6 +517,72 @@ def run(
     return 0 if status in ("ok", "dry_run") else 1
 
 
+def _scrape_day_into_archive(
+    conn: sqlite3.Connection,
+    day: date,
+    by_uid: dict[int, rp_sales.SaleLot],
+    sheet_index: dict[tuple[int, str, int], sheet_mod.SheetRow],
+    sale_totals: dict[tuple[int, str], int],
+) -> int:
+    """Scrape one day's RP results for our uid set and upsert matches into
+    ``results_archive``. Returns the number of outcomes written."""
+    uids = set(by_uid.keys())
+    if not uids:
+        return 0
+    try:
+        hits = rp_results.fetch_hits_for_uids(day, uids)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("results fetch failed for %s: %s", day, exc)
+        hits = []
+    n = 0
+    for hit in hits:
+        lot = by_uid.get(hit.horse_uid)
+        if lot is None:
+            continue
+        row = _ran_row(lot, hit)
+        if sheet_index:
+            _enrich_with_sheet([row], sheet_index, sale_totals)
+        upsert_result_row(conn, row)
+        n += 1
+    return n
+
+
+def _ensure_season_archive(
+    conn: sqlite3.Connection,
+    *,
+    season_start: date,
+    today: date,
+    by_uid: dict[int, rp_sales.SaleLot],
+    sheet_index: dict[tuple[int, str, int], sheet_mod.SheetRow],
+    sale_totals: dict[tuple[int, str], int],
+) -> dict[str, int]:
+    """Walk every result date in ``[season_start, today)`` not yet recorded in
+    ``results_scrape_log`` and write matching outcomes to ``results_archive``.
+
+    This is what makes the season-to-date summary cover graduates that ran
+    before the results feature launched: on the first evening run (or the first
+    after a CI cache eviction wipes the DB) it self-heals the whole season,
+    then tracks each day so subsequent runs only ever scrape today. ``today``
+    itself is covered by the live evening results fetch upstream, so it's marked
+    scraped here without re-walking it."""
+    if season_start > today:
+        return {"days_scraped": 0, "rows_added": 0}
+    already = scraped_result_dates(conn)
+    days_scraped = rows_added = 0
+    day = season_start
+    while day < today:
+        iso = day.isoformat()
+        if iso not in already:
+            rows_added += _scrape_day_into_archive(
+                conn, day, by_uid, sheet_index, sale_totals
+            )
+            mark_result_date_scraped(conn, iso)
+            days_scraped += 1
+        day += timedelta(days=1)
+    mark_result_date_scraped(conn, today.isoformat())
+    return {"days_scraped": days_scraped, "rows_added": rows_added}
+
+
 def backfill_results(*, from_date: date, to_date: date | None = None) -> int:
     """Scrape RP results for every date in ``[from_date, to_date]`` and write
     matching breeze-up graduate outcomes to ``results_archive``.
@@ -533,21 +629,10 @@ def backfill_results(*, from_date: date, to_date: date | None = None) -> int:
         total_hits = 0
         day = from_date
         while day <= to_date:
-            try:
-                hits = rp_results.fetch_hits_for_uids(day, uids)
-            except Exception as exc:  # noqa: BLE001
-                log.warning("results fetch failed for %s: %s", day, exc)
-                hits = []
-            log.info("%s: %d result hit(s)", day, len(hits))
-            for hit in hits:
-                lot = by_uid.get(hit.horse_uid)
-                if lot is None:
-                    continue
-                row = _ran_row(lot, hit)
-                if sheet_index:
-                    _enrich_with_sheet([row], sheet_index, sale_totals)
-                upsert_result_row(conn, row)
-                total_hits += 1
+            n = _scrape_day_into_archive(conn, day, by_uid, sheet_index, sale_totals)
+            log.info("%s: %d result hit(s)", day, n)
+            mark_result_date_scraped(conn, day.isoformat())
+            total_hits += n
             day += timedelta(days=1)
         log.info("Backfill complete: %d outcome(s) written to results_archive", total_hits)
     return 0

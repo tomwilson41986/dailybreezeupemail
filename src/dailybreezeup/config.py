@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 from pydantic import Field, field_validator
@@ -32,6 +33,11 @@ class Settings(BaseSettings):
     notify_on_empty: bool = False
     entries_window_days: int = 3
     db_path: Path = Field(default=Path("data/breezeup.sqlite"))
+
+    # First result date the season-to-date summary should cover. The evening
+    # run self-heals the archive back to this date (see daily._ensure_season_archive),
+    # so graduates that ran before the results feature launched still count.
+    season_start_date: date = Field(default=date(2026, 4, 1))
 
     sheet_csv_url: str = DEFAULT_SHEET_CSV_URL
 
