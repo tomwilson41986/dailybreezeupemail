@@ -187,7 +187,9 @@ def _classify(
             continue
         ran.append(_ran_row(lot, hit))
 
-    entered.sort(key=lambda r: (r["race_date"], r.get("course") or "", r["lot"]))
+    entered.sort(key=lambda r: (
+        r["race_date"], r.get("off_time") or time(0, 0), r.get("course") or "", r["lot"]
+    ))
     ran.sort(key=lambda r: (r.get("off_time") or time(0, 0), r.get("course") or "", r["lot"]))
     return entered, ran
 
@@ -219,12 +221,14 @@ def _enrich_with_sheet(
     return matched, missing
 
 
-def _resort_by_rating(rows: list[dict[str, Any]]) -> None:
-    """Within each race day + course, surface the highest Breeze Rating first
-    so the most interesting horses lead the section."""
+def _resort_entered(rows: list[dict[str, Any]]) -> None:
+    """Order the morning entries by race time, earliest to latest within each
+    day. Breeze Rating only breaks ties between horses in the same race, so the
+    most interesting runner leads its race without disturbing the time order."""
     rows.sort(
         key=lambda r: (
             r.get("race_date"),
+            r.get("off_time") or time(0, 0),
             r.get("course") or "",
             -(r.get("sheet_breeze_rating") or 0.0),
             r["lot"],
@@ -407,7 +411,7 @@ def run(
                 f"entered matched={em}/missing={mm}, "
                 f"ran_today matched={rm}/missing={mr}"
             )
-            _resort_by_rating(entered)
+            _resort_entered(entered)
         diagnostics["sheet_status"] = sheet_status
 
         diagnostics["entered_in_window_pre_dedup"] = len(entered)
