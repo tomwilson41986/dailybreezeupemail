@@ -129,6 +129,65 @@ def test_racecard_side_entry_wins_when_lot_matches_both_paths():
     assert entered[0]["horse_name"] == "Hot Havana"
 
 
+def test_morning_entries_ordered_by_race_time_earliest_first():
+    """The morning email must list entries by race time, earliest to latest
+    within each day. Build three racecard entries deliberately out of order —
+    a later same-day race, an earlier same-day race, and a next-day race — and
+    assert they come back ordered by (race_date, off_time)."""
+    today = date(2026, 4, 24)
+
+    def _rc(uid: int, *, race_date: date, off_time: time, race_uid: str) -> rp_racecards.RacecardEntry:
+        return rp_racecards.RacecardEntry(
+            horse_uid=uid,
+            horse_slug=f"h{uid}",
+            horse_name=f"Horse {uid}",
+            course_uid=38,
+            course="Newmarket",
+            race_date=race_date,
+            off_time=off_time,
+            race_name="Maiden Stakes",
+            race_url=f"https://www.racingpost.com/racecards/38/newmarket/{race_date.isoformat()}/{race_uid}",
+            race_uid=race_uid,
+            silk_url=None,
+        )
+
+    lots = [_lot(horse_uid=uid, entry=None) for uid in (1, 2, 3)]
+    racecards = [
+        _rc(1, race_date=date(2026, 4, 25), off_time=time(16, 5), race_uid="901"),
+        _rc(2, race_date=date(2026, 4, 25), off_time=time(13, 40), race_uid="902"),
+        _rc(3, race_date=date(2026, 4, 26), off_time=time(14, 0), race_uid="903"),
+    ]
+
+    entered, _ran = daily._classify(
+        today, lots, results=[], racecard_entries=racecards,
+        entries_window_days=3,
+    )
+
+    assert [r["off_time"] for r in entered] == [time(13, 40), time(16, 5), time(14, 0)]
+    assert [r["race_date"] for r in entered] == [
+        date(2026, 4, 25), date(2026, 4, 25), date(2026, 4, 26),
+    ]
+
+
+def test_resort_entered_keeps_race_time_order_over_breeze_rating():
+    """After sheet enrichment the entries are resorted, but race time must stay
+    the primary key — a later race with a higher Breeze Rating must not jump
+    ahead of an earlier race. Rating only breaks ties within the same race."""
+    rows = [
+        {"race_date": date(2026, 4, 25), "off_time": time(16, 5),
+         "course": "Newmarket", "sheet_breeze_rating": 99.0, "lot": 1},
+        {"race_date": date(2026, 4, 25), "off_time": time(13, 40),
+         "course": "Newmarket", "sheet_breeze_rating": 50.0, "lot": 2},
+        {"race_date": date(2026, 4, 25), "off_time": time(13, 40),
+         "course": "Newmarket", "sheet_breeze_rating": 80.0, "lot": 3},
+    ]
+    daily._resort_entered(rows)
+
+    # Earliest race first, even though its horses rate lower; within the 13:40
+    # race the higher Breeze Rating (lot 3) leads.
+    assert [r["lot"] for r in rows] == [3, 2, 1]
+
+
 def test_guineas_and_arqana_entered_lots_surface_via_entry_details():
     """Guineas HIT and Arqana grads reach the morning email through the
     catalogue's entry_details path — no horse_uid or racecard match required.
