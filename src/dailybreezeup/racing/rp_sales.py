@@ -179,6 +179,58 @@ class SaleLot:
         return f"{self.sire_name} x {self.dam_name}" if self.sire_name or self.dam_name else ""
 
 
+# ---------- sale attribution ----------
+
+# Buyer labels Racing Post uses for lots that did NOT change hands: withdrawn
+# before the ring, failed to meet reserve, or bought back by the vendor. A
+# 2yo can be catalogued at several breeze-up sales in a season — pulled out of
+# one then offered again at the next — so the same horse_uid can appear in more
+# than one catalogue. When that happens we attribute the horse to the sale
+# where it actually sold (e.g. Byzantine: withdrawn from Tattersalls Craven,
+# sold at Arqana) so the email and the ratings join show the correct sale.
+_NOT_SOLD_BUYERS = {
+    "withdrawn", "not sold", "vendor", "bought back", "not offered",
+    "unsold", "wd", "na", "",
+}
+
+
+def lot_was_sold(lot: "SaleLot") -> bool:
+    """True when this lot records a genuine sale (a real buyer name).
+
+    Returns False for withdrawn / not-sold / bought-back / vendor lots, which
+    RP marks with one of the placeholder labels in ``_NOT_SOLD_BUYERS`` rather
+    than a buyer name (and for lots with no buyer at all)."""
+    label = re.sub(r"[^a-z ]", "", (lot.buyer or "").lower())
+    label = re.sub(r"\s+", " ", label).strip()
+    return label not in _NOT_SOLD_BUYERS
+
+
+def index_lots_by_uid(lots: Iterable["SaleLot"]) -> dict[int, "SaleLot"]:
+    """Map ``horse_uid`` -> the canonical :class:`SaleLot` for that horse.
+
+    When a horse is catalogued at more than one sale, prefer the lot from the
+    sale where it actually sold over a withdrawn / not-sold lot; among lots with
+    the same sold-status, prefer the later sale date (so a re-offer wins over an
+    earlier withdrawal, matching the order RP lists them). Lots without a
+    ``horse_uid`` are skipped — they can't be deduplicated across catalogues."""
+    by_uid: dict[int, SaleLot] = {}
+    for lot in lots:
+        if lot.horse_uid is None:
+            continue
+        existing = by_uid.get(lot.horse_uid)
+        if existing is None or _prefer_lot(lot, existing):
+            by_uid[lot.horse_uid] = lot
+    return by_uid
+
+
+def _prefer_lot(candidate: "SaleLot", incumbent: "SaleLot") -> bool:
+    """True if ``candidate`` should replace ``incumbent`` as a horse's sale."""
+    cand_sold, inc_sold = lot_was_sold(candidate), lot_was_sold(incumbent)
+    if cand_sold != inc_sold:
+        return cand_sold
+    return candidate.sale.sale_date >= incumbent.sale.sale_date
+
+
 # ---------- parsers (pure; take bytes/str, return dataclasses) ----------
 
 

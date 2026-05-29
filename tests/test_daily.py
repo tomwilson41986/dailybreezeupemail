@@ -236,6 +236,48 @@ def test_guineas_and_arqana_entered_lots_surface_via_entry_details():
     assert ("Arqana", "Byzantine") in surfaced
 
 
+def test_horse_withdrawn_then_sold_is_recorded_against_sale_it_sold_at():
+    """Byzantine is catalogued at both Tattersalls Craven (withdrawn) and Arqana
+    (sold) under the same horse_uid, both pointing at the same race. It must
+    surface exactly once, attributed to Arqana — the sale it sold at — never as
+    a Craven duplicate."""
+    today = date(2026, 5, 23)
+    entry = rp_sales.EntryDetails(
+        course_uid=104, course_name="YARMOUTH",
+        race_date=date(2026, 5, 25), race_uid=918989,
+    )
+
+    def _sale_lot(sale, *, buyer):
+        return rp_sales.SaleLot(
+            sale=sale, lot_no=47, lot_letter="",
+            horse_uid=8688568, horse_name="Byzantine",
+            sire_uid=None, sire_name="Sire", dam_uid=None, dam_name="Dam",
+            sire_of_dam_name="", sex="C", age=2, year_foaled=2024,
+            seller="", price_label=None, buyer=buyer, entered=True, entry=entry,
+        )
+
+    craven = rp_sales.Sale(
+        venue_uid=5, sale_date=date(2026, 4, 14), sale_end_date=date(2026, 4, 15),
+        sale_name="Tattersalls Craven Breeze Up Sale 2026", sale_co="Tattersalls",
+    )
+    arqana = rp_sales.Sale(
+        venue_uid=36, sale_date=date(2026, 5, 9), sale_end_date=date(2026, 5, 9),
+        sale_name="Arqana May 2yo Breeze Up 2026", sale_co="Arqana",
+    )
+    craven_lot = _sale_lot(craven, buyer="Withdrawn")
+    arqana_lot = _sale_lot(arqana, buyer="Haras de Saint Pair")
+
+    entered, _ran = daily._classify(
+        today, [craven_lot, arqana_lot], results=[], racecard_entries=[],
+        entries_window_days=3,
+    )
+
+    byzantine_rows = [r for r in entered if r["horse_name"] == "Byzantine"]
+    assert len(byzantine_rows) == 1
+    assert byzantine_rows[0]["sale_co"] == "Arqana"
+    assert byzantine_rows[0]["sale_name"] == "Arqana May 2yo Breeze Up 2026"
+
+
 def test_guineas_lot_gets_sheet_ratings_via_sale_alias():
     """A Guineas HIT lot must pick up its gSheet ratings. The sheet labels these
     rows "Guineas", so sale_short_name has to resolve the verbose RP name to that

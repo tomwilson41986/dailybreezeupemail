@@ -189,3 +189,54 @@ def test_demo_lots_returns_four_entered_craven_lots():
     assert by_lot[16].entry.race_date == date(2026, 10, 3)
     # Three of the four have horse_uid; lot 178 is unregistered so uid=None
     assert by_lot[178].horse_uid is None
+
+
+# ── Sale attribution (withdrawn-then-sold dedup) ───────────────────────────
+
+
+def _lot(sale: rp_sales.Sale, *, horse_uid, buyer) -> rp_sales.SaleLot:
+    return rp_sales.SaleLot(
+        sale=sale, lot_no=47, lot_letter="",
+        horse_uid=horse_uid, horse_name="Byzantine",
+        sire_uid=None, sire_name="Sire", dam_uid=None, dam_name="Dam",
+        sire_of_dam_name="", sex="C", age=2, year_foaled=2024,
+        seller="", price_label=None, buyer=buyer, entered=False, entry=None,
+    )
+
+
+def _arqana_sale() -> rp_sales.Sale:
+    return rp_sales.Sale(
+        venue_uid=36, sale_date=date(2026, 5, 9), sale_end_date=date(2026, 5, 9),
+        sale_name="Arqana May 2yo Breeze Up 2026", sale_co="Arqana",
+    )
+
+
+def test_lot_was_sold_distinguishes_real_buyer_from_placeholders():
+    sale = _craven_sale()
+    assert rp_sales.lot_was_sold(_lot(sale, horse_uid=1, buyer="Stroud Coleman Bloodstock"))
+    for marker in ("Withdrawn", "Not Sold", "Vendor", "(Bought Back)", "Unsold", None, ""):
+        assert not rp_sales.lot_was_sold(_lot(sale, horse_uid=1, buyer=marker)), marker
+
+
+def test_index_lots_by_uid_attributes_horse_to_sale_it_sold_at():
+    """Byzantine is withdrawn at Craven and sold at Arqana under the same uid.
+    The canonical lot must be the Arqana one (the sale it actually sold at)."""
+    craven = _lot(_craven_sale(), horse_uid=8688568, buyer="Withdrawn")
+    arqana = _lot(_arqana_sale(), horse_uid=8688568, buyer="Haras de Saint Pair")
+
+    # Order must not matter: sold beats withdrawn either way.
+    for lots in ([craven, arqana], [arqana, craven]):
+        by_uid = rp_sales.index_lots_by_uid(lots)
+        assert by_uid[8688568].sale.sale_co == "Arqana"
+
+
+def test_index_lots_by_uid_skips_unnamed_lots():
+    assert rp_sales.index_lots_by_uid([_lot(_arqana_sale(), horse_uid=None, buyer="X")]) == {}
+
+
+def test_index_lots_by_uid_prefers_later_sale_when_neither_sold():
+    """Withdrawn at both sales: keep the later (re-offered) sale deterministically."""
+    craven = _lot(_craven_sale(), horse_uid=42, buyer="Withdrawn")
+    arqana = _lot(_arqana_sale(), horse_uid=42, buyer="Not Sold")
+    by_uid = rp_sales.index_lots_by_uid([arqana, craven])
+    assert by_uid[42].sale.sale_co == "Arqana"

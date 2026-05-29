@@ -146,9 +146,9 @@ def _classify(
     race_off_times: dict[str, time] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     window_end = today + timedelta(days=entries_window_days)
-    by_uid: dict[int, rp_sales.SaleLot] = {
-        lot.horse_uid: lot for lot in lots if lot.horse_uid is not None
-    }
+    # A horse catalogued at several sales (withdrawn from one, sold at another)
+    # is attributed to the sale where it sold — see rp_sales.index_lots_by_uid.
+    by_uid: dict[int, rp_sales.SaleLot] = rp_sales.index_lots_by_uid(lots)
 
     entered: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
@@ -177,6 +177,12 @@ def _classify(
         if not (lot.entered and lot.entry):
             continue
         if not (today <= lot.entry.race_date <= window_end):
+            continue
+        # Skip a lot whose horse is attributed to a different sale (it was
+        # withdrawn here and sold elsewhere); the canonical lot is pushed via
+        # by_uid above. Unnamed lots (no horse_uid) can't be deduped, so they
+        # always go through.
+        if lot.horse_uid is not None and by_uid.get(lot.horse_uid) is not lot:
             continue
         _push(_entered_row(lot, race_off_times=race_off_times))
 
@@ -444,9 +450,7 @@ def run(
             # ran before the results feature launched still show in the summary.
             # Tracked per-day, so this only scrapes historical dates once (and
             # re-fills after a cache eviction). Never let it block the email.
-            by_uid = {
-                lot.horse_uid: lot for lot in all_lots if lot.horse_uid is not None
-            }
+            by_uid = rp_sales.index_lots_by_uid(all_lots)
             try:
                 fill = _ensure_season_archive(
                     conn,
@@ -611,9 +615,7 @@ def backfill_results(*, from_date: date, to_date: date | None = None) -> int:
             lots = rp_sales.fetch_lots(sale)
             log.info("  %s: %d lots", sale.sale_name, len(lots))
             all_lots.extend(lots)
-        by_uid: dict[int, rp_sales.SaleLot] = {
-            lot.horse_uid: lot for lot in all_lots if lot.horse_uid is not None
-        }
+        by_uid: dict[int, rp_sales.SaleLot] = rp_sales.index_lots_by_uid(all_lots)
         uids = set(by_uid.keys())
         log.info("Horse uids in scope: %d", len(uids))
         if not uids:
