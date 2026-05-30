@@ -24,6 +24,22 @@ def test_explicit_sheet_csv_url_overrides(monkeypatch):
     assert s.sheet_csv_url == "https://example.com/foo.csv"
 
 
+def test_window_defaults_decouple_racecard_from_catalogue(monkeypatch):
+    # The catalogue entry_details horizon is wider than the racecard scrape
+    # window so entries known days ahead aren't dropped from the morning email.
+    monkeypatch.delenv("ENTRIES_WINDOW_DAYS", raising=False)
+    monkeypatch.delenv("CATALOGUE_ENTRIES_WINDOW_DAYS", raising=False)
+    s = Settings()
+    assert s.entries_window_days == 3
+    assert s.catalogue_entries_window_days == 7
+
+
+def test_catalogue_window_overridable(monkeypatch):
+    monkeypatch.setenv("CATALOGUE_ENTRIES_WINDOW_DAYS", "10")
+    s = Settings()
+    assert s.catalogue_entries_window_days == 10
+
+
 def test_email_to_list_always_includes_baked_recipients(monkeypatch):
     monkeypatch.setenv("EMAIL_TO", "")
     s = Settings()

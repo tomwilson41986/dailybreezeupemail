@@ -69,6 +69,10 @@ jobs:
         ${{ github.event.inputs.entries_window_days
             || vars.ENTRIES_WINDOW_DAYS
             || '3' }}
+      # Wider horizon for the (free) catalogue entry_details fallback so entries
+      # known days ahead aren't dropped by the tight racecard window.
+      CATALOGUE_ENTRIES_WINDOW_DAYS: >-
+        ${{ vars.CATALOGUE_ENTRIES_WINDOW_DAYS || '7' }}
       # Schedule cron's `schedule` event has no inputs, so derive mode from
       # the cron expression. workflow_dispatch can override via the input.
       RUN_MODE: >-

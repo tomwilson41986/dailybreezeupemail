@@ -12,9 +12,9 @@ Source is Racing Post's bloodstock sale catalogue (the authoritative join betwee
 1. **Discover sales**: fetch `https://www.racingpost.com/bloodstock/sales/catalogues/` and filter to sale records whose name matches `/breeze.?up/i` in the current calendar year, plus the Tattersalls Guineas Horses-in-Training Sale (which runs the day after Craven and re-offers the unsold-at-Craven 2yos under Tatts' internal `breezeup2` catalogue). The Guineas HIT also contains older HIT lots — `fetch_lots` filters those out, keeping only age-2 rows. Typical 2026 set: Tattersalls Craven, Goffs UK 2yo Breeze Up, Tattersalls Guineas Horses-in-Training (2yos only), Arqana May 2yo Breeze Up, Tattersalls Ireland Breeze Up, Osarus Breeze-Up & HIT.
 2. **Fetch lots per sale**: paginate `.../catalogues/<venue_uid>/<YYYY-MM-DD>/data.json`. Each row is one catalogued lot with an `entered` flag, a `horse_uid` (once RP has registered the horse), and an `entry_details` pointer to one race.
 3. **Classify**:
-   - **Morning · Entered (next 3 days)**: union of two joins, deduped by `(lot_id, race_uid)`:
-     - **Racecards uid-join (primary)**: collect every `horse_uid` across all catalogues, walk RP's racecards for each day in the window, emit one row per runner whose uid is in our set. This carries the silk URL and live race metadata (off-time, race name).
-     - **Catalogue `entry_details` (fallback)**: covers any entry where the catalogue points at a race RP hasn't yet ingested into the racecards index.
+   - **Morning · Entered**: union of two joins, deduped by `(lot_id, race_uid)`:
+     - **Racecards uid-join (primary, next `ENTRIES_WINDOW_DAYS`=3 days)**: collect every `horse_uid` across all catalogues, walk RP's racecards for each day in the window, emit one row per runner whose uid is in our set. This carries the silk URL and live race metadata (off-time, race name). The window is kept tight because this scrape is expensive (one racecard walk per day) and declarations only publish ~48h out.
+     - **Catalogue `entry_details` (fallback, next `CATALOGUE_ENTRIES_WINDOW_DAYS`=7 days)**: covers any entry where the catalogue points at a race RP hasn't yet ingested into the racecards index. The catalogue is fetched for free and knows about entries days before they reach the racecards (UK flat entries close at the 5-6 day stage), so it gets a wider horizon — without it, a grad whose only engagement is 4+ days out is dropped from every morning email until the race falls inside the racecard window. The 7-day cap stops short of the months-out long-range entries the catalogue also carries.
    - **Evening · Ran today**: collect every `horse_uid`, fetch `/results/<today>`, walk each race page, emit one row per `/profile/horse/<uid>` link whose uid is in our set.
 4. **Render** HTML + plain-text email with inline silks (rasterised from RP's SVGs to white-backed PNGs via resvg-py) and send via Gmail SMTP. Each `(run_date, category, lot_id, race_uid)` is logged to `email_log` to dedup re-runs within the day.
 
@@ -38,7 +38,8 @@ Configured under repo settings → Secrets / Variables → Actions. The workflow
 | `EMAIL_TO` | secret | Recipient(s), comma-separated. Three Blandford Bloodstock addresses are always included on top of this — see `_ALWAYS_RECIPIENTS` in `config.py`. |
 | `SHEET_CSV_URL` | variable (optional) | Override the gSheet for ratings enrichment. Empty falls back to the default sheet. |
 | `NOTIFY_ON_EMPTY` | variable (optional) | `true` to send a morning "nothing today" email on quiet days. Evening always sends regardless. |
-| `ENTRIES_WINDOW_DAYS` | variable (optional) | Default 3. Forward window for the morning "Entries & declarations" section. |
+| `ENTRIES_WINDOW_DAYS` | variable (optional) | Default 3. Forward window for the racecards scrape that powers the morning "Entries & declarations" section. |
+| `CATALOGUE_ENTRIES_WINDOW_DAYS` | variable (optional) | Default 7. Forward window for the catalogue `entry_details` fallback — wider than the racecard window so entries known in the catalogue days ahead aren't dropped. |
 
 ## Local development
 

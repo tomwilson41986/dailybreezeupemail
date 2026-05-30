@@ -91,6 +91,82 @@ def test_catalogue_side_entry_off_time_missing_when_race_not_scanned():
     assert entered[0]["off_time"] is None
 
 
+def test_catalogue_entry_beyond_racecard_window_surfaces_within_catalogue_window():
+    """Regression: a catalogue entry 4 days out (one day past the 3-day
+    racecard window) must still surface via the wider catalogue horizon.
+
+    This is the bug where breeze-up grads entered for a race 4+ days out were
+    dropped from every morning email — the racecard scan can't see them yet
+    (declarations publish ~48h out) and the catalogue fallback was capped at
+    the same 3-day window. Mirrors the real Cosmic Mystery / Alta Regina miss
+    (entered for Nottingham 4 days out)."""
+    today = date(2026, 5, 30)
+    entry = rp_sales.EntryDetails(
+        course_uid=40,
+        course_name="NOTTINGHAM",
+        race_date=date(2026, 6, 3),  # today + 4 days: outside the 3-day window
+        race_uid=919980,
+    )
+    lot = _lot(horse_uid=9312929, entry=entry)
+
+    # With the catalogue horizon left at the racecard window, it's dropped.
+    dropped, _ = daily._classify(
+        today, [lot], results=[], racecard_entries=[],
+        entries_window_days=3,
+        catalogue_entries_window_days=3,
+    )
+    assert dropped == []
+
+    # With the wider catalogue horizon it surfaces.
+    surfaced, _ = daily._classify(
+        today, [lot], results=[], racecard_entries=[],
+        entries_window_days=3,
+        catalogue_entries_window_days=7,
+    )
+    assert len(surfaced) == 1
+    assert surfaced[0]["race_date"] == date(2026, 6, 3)
+
+
+def test_catalogue_long_range_entry_excluded_by_catalogue_window():
+    """The catalogue carries long-range entries (months out). The catalogue
+    horizon must still cap those so the morning email isn't flooded with a
+    horse entered for an October race every day until October."""
+    today = date(2026, 5, 30)
+    entry = rp_sales.EntryDetails(
+        course_uid=38,
+        course_name="NEWMARKET",
+        race_date=date(2026, 10, 3),  # ~4 months out
+        race_uid=910567,
+    )
+    lot = _lot(horse_uid=8688568, entry=entry)
+
+    entered, _ = daily._classify(
+        today, [lot], results=[], racecard_entries=[],
+        entries_window_days=3,
+        catalogue_entries_window_days=7,
+    )
+    assert entered == []
+
+
+def test_catalogue_window_defaults_to_racecard_window_when_unset():
+    """Back-compat: callers that don't pass catalogue_entries_window_days get
+    the old behaviour (both paths share entries_window_days)."""
+    today = date(2026, 5, 30)
+    entry = rp_sales.EntryDetails(
+        course_uid=40,
+        course_name="NOTTINGHAM",
+        race_date=date(2026, 6, 3),  # today + 4 days
+        race_uid=919980,
+    )
+    lot = _lot(horse_uid=9312929, entry=entry)
+
+    entered, _ = daily._classify(
+        today, [lot], results=[], racecard_entries=[],
+        entries_window_days=3,
+    )
+    assert entered == []
+
+
 def test_racecard_side_entry_wins_when_lot_matches_both_paths():
     """When a lot is matched by both racecards and the catalogue, the
     racecard-derived row (with its own off_time, race_name, silk_url) must
