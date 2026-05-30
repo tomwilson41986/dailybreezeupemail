@@ -245,6 +245,39 @@ def test_morning_entries_ordered_by_race_time_earliest_first():
     ]
 
 
+def test_racecard_name_fallback_resolves_lot_without_uid():
+    """A grad whose catalogue lot has no horse_uid still surfaces: the racecard
+    runner is matched by name (the runner carries its own real uid, which isn't
+    in our catalogue), and _classify resolves it back to the named lot via the
+    name index. Mirrors the catalogue-lag case the morning email must survive."""
+    today = date(2026, 5, 30)
+    # Catalogue lot: named, but RP hasn't linked a horse_uid to it yet.
+    lot = rp_sales.SaleLot(
+        sale=_sale(), lot_no=42, lot_letter="", horse_uid=None,
+        horse_name="Phantom Lot", sire_uid=None, sire_name="Kodiac",
+        dam_uid=None, dam_name="Spectre", sire_of_dam_name="", sex="F",
+        age=2, year_foaled=2024, seller="", price_label=None, buyer=None,
+        entered=False, entry=None,
+    )
+    # Racecard runner: declared today, carrying its own (catalogue-unknown) uid.
+    rc = rp_racecards.RacecardEntry(
+        horse_uid=8000001, horse_slug="phantom-lot", horse_name="Phantom Lot",
+        course_uid=31, course="Lingfield", race_date=today, off_time=time(19, 12),
+        race_name="Novice Stakes",
+        race_url="https://www.racingpost.com/racecards/31/lingfield/2026-05-30/919050",
+        race_uid="919050", silk_url=None,
+    )
+
+    entered, _ran = daily._classify(
+        today, [lot], results=[], racecard_entries=[rc],
+        entries_window_days=3,
+    )
+    assert len(entered) == 1
+    assert entered[0]["lot_id"] == lot.lot_id
+    assert entered[0]["race_date"] == today
+    assert entered[0]["off_time"] == time(19, 12)
+
+
 def test_resort_entered_keeps_race_time_order_over_breeze_rating():
     """After sheet enrichment the entries are resorted, but race time must stay
     the primary key — a later race with a higher Breeze Rating must not jump

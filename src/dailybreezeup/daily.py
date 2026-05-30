@@ -159,6 +159,14 @@ def _classify(
     by_uid: dict[int, rp_sales.SaleLot] = {
         lot.horse_uid: lot for lot in lots if lot.horse_uid is not None
     }
+    # Name index for the racecard fallback: lots RP hasn't linked a horse_uid
+    # to can't be uid-joined, so a runner that matched on name resolves back to
+    # its lot here. Only no-uid lots are indexed — uid'd lots always resolve via
+    # by_uid, which is authoritative.
+    by_name: dict[str, rp_sales.SaleLot] = {}
+    for lot in lots:
+        if lot.horse_uid is None and lot.horse_name:
+            by_name.setdefault(rp_racecards.normalize_name(lot.horse_name), lot)
 
     entered: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
@@ -178,7 +186,9 @@ def _classify(
     for rc in racecard_entries or []:
         if not (today <= rc.race_date <= window_end):
             continue
-        lot = by_uid.get(rc.horse_uid)
+        lot = by_uid.get(rc.horse_uid) if rc.horse_uid is not None else None
+        if lot is None and rc.horse_name:
+            lot = by_name.get(rp_racecards.normalize_name(rc.horse_name))
         if lot is None:
             continue
         _push(_entered_row_from_racecard(lot, rc))
@@ -365,12 +375,23 @@ def run(
             else:
                 log.info("morning mode: skipping results fetch")
                 uids = {lot.horse_uid for lot in all_lots if lot.horse_uid is not None}
-                log.info("Horse uids across all catalogues: %d", len(uids))
-                if uids:
+                # Name fallback for lots RP hasn't linked a uid to yet: map the
+                # normalized name to the lot's age so the racecard scan can still
+                # match a declared runner (age guards against name collisions).
+                target_names = {
+                    rp_racecards.normalize_name(lot.horse_name): lot.age
+                    for lot in all_lots
+                    if lot.horse_uid is None and lot.horse_name
+                }
+                log.info("Horse uids across all catalogues: %d (+%d name-only lots)",
+                         len(uids), len(target_names))
+                if uids or target_names:
                     for offset in range(settings.entries_window_days + 1):
                         on = today + timedelta(days=offset)
                         day_entries, day_off_times = (
-                            rp_racecards.fetch_entries_for_uids(on, uids)
+                            rp_racecards.fetch_entries_for_uids(
+                                on, uids, target_names=target_names
+                            )
                         )
                         log.info("Racecard hits for %s: %d", on, len(day_entries))
                         racecard_entries.extend(day_entries)
