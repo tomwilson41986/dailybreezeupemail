@@ -143,9 +143,19 @@ def _classify(
     racecard_entries: list[rp_racecards.RacecardEntry] | None = None,
     *,
     entries_window_days: int,
+    catalogue_entries_window_days: int | None = None,
     race_off_times: dict[str, time] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    # The racecard scrape is capped at entries_window_days (it's expensive and
+    # declarations only publish ~48h out). The catalogue entry_details fallback
+    # is fetched for free and knows about entries days earlier, so it gets its
+    # own, wider horizon — otherwise grads whose only engagement is 4+ days out
+    # are dropped from every morning email until the race falls inside the
+    # racecard window. Defaults to entries_window_days when not given.
+    if catalogue_entries_window_days is None:
+        catalogue_entries_window_days = entries_window_days
     window_end = today + timedelta(days=entries_window_days)
+    catalogue_window_end = today + timedelta(days=catalogue_entries_window_days)
     by_uid: dict[int, rp_sales.SaleLot] = {
         lot.horse_uid: lot for lot in lots if lot.horse_uid is not None
     }
@@ -176,7 +186,7 @@ def _classify(
     for lot in lots:
         if not (lot.entered and lot.entry):
             continue
-        if not (today <= lot.entry.race_date <= window_end):
+        if not (today <= lot.entry.race_date <= catalogue_window_end):
             continue
         _push(_entered_row(lot, race_off_times=race_off_times))
 
@@ -368,18 +378,24 @@ def run(
                 diagnostics["racecard_hits"] = len(racecard_entries)
 
         entries_window_days = settings.entries_window_days
+        catalogue_entries_window_days = settings.catalogue_entries_window_days
         if demo:
             # Demo lots have static future race dates that may sit far outside
             # the production window. Force the window wide so --demo always
             # renders a populated body for layout verification.
             entries_window_days = 9999
+            catalogue_entries_window_days = 9999
 
         entered, ran = _classify(
             today, all_lots, hits, racecard_entries,
             entries_window_days=entries_window_days,
+            catalogue_entries_window_days=catalogue_entries_window_days,
             race_off_times=race_off_times,
         )
-        log.info("entries window: today..+%d days", entries_window_days)
+        log.info(
+            "entries window: racecard today..+%d days, catalogue today..+%d days",
+            entries_window_days, catalogue_entries_window_days,
+        )
 
         # The two emails own disjoint sections: the morning email is for
         # entries/declarations only, the evening email is for results only.
@@ -432,6 +448,7 @@ def run(
                 diagnostics["dedup_dropped_entered"] = dropped_entered
                 diagnostics["dedup_dropped_ran_today"] = dropped_ran
         diagnostics["entries_window_days"] = entries_window_days
+        diagnostics["catalogue_entries_window_days"] = catalogue_entries_window_days
 
         # Persist today's result hits before we render so the season-to-date
         # summary at the bottom of the evening email includes them. The
@@ -479,7 +496,11 @@ def run(
             run_date=today,
             entered=entered,
             ran_today=ran,
-            entries_window_days=entries_window_days,
+            # The catalogue horizon is the effective span of what the Entries
+            # section can show (it's the wider of the two windows), so the
+            # header/empty-state copy reflects it rather than the narrower
+            # racecard-scrape window.
+            entries_window_days=catalogue_entries_window_days,
             diagnostics=diagnostics,
             mode=mode,
             season_summary=season_summary,

@@ -32,6 +32,15 @@ class Settings(BaseSettings):
 
     notify_on_empty: bool = False
     entries_window_days: int = 3
+    # Forward horizon (days, inclusive) for the catalogue entry_details
+    # fallback. The racecards scrape is capped at entries_window_days because
+    # it's expensive and declarations only publish ~48h out; the catalogue,
+    # by contrast, is fetched for free and knows about entries days ahead (UK
+    # flat entries close at the 5-6 day stage). Capping the catalogue path at
+    # the same 3 days silently dropped grads whose only engagement was 4+ days
+    # out. 7 days covers the entry-closing stage without listing the months-out
+    # long-range entries the catalogue also carries.
+    catalogue_entries_window_days: int = 7
     db_path: Path = Field(default=Path("data/breezeup.sqlite"))
 
     # First result date the season-to-date summary should cover. The evening
