@@ -75,6 +75,18 @@ def _lot_row(lot: rp_sales.SaleLot, *, race_uid: str | None) -> dict[str, Any]:
     }
 
 
+def _racecard_url(entry: rp_sales.EntryDetails) -> str:
+    """Build the RP racecard URL for a catalogue entry. RP 404s on a wrong
+    slug, so the course slug is derived the same way the racecard scraper does
+    (``rp_racecards.course_slug``) — this URL is both the email link and, in the
+    morning flow, fed to the scraper to force-scrape races RP's index omits."""
+    return (
+        f"https://www.racingpost.com/racecards/{entry.course_uid}/"
+        f"{rp_racecards.course_slug(entry.course_name)}/"
+        f"{entry.race_date.isoformat()}/{entry.race_uid}"
+    )
+
+
 def _entered_row(
     lot: rp_sales.SaleLot,
     *,
@@ -93,11 +105,7 @@ def _entered_row(
         "course": entry.course_name.title(),
         "race_date": entry.race_date,
         "off_time": off_time,
-        "race_url": (
-            f"https://www.racingpost.com/racecards/{entry.course_uid}/"
-            f"{entry.course_name.lower().replace(' ', '-')}/"
-            f"{entry.race_date.isoformat()}/{entry.race_uid}"
-        ),
+        "race_url": _racecard_url(entry),
     })
     return base
 
@@ -388,9 +396,21 @@ def run(
                 if uids or target_names:
                     for offset in range(settings.entries_window_days + 1):
                         on = today + timedelta(days=offset)
+                        # Force-scrape the races our catalogue says a grad is
+                        # entered in on this day. RP's racecards index sometimes
+                        # omits a race that genuinely runs (notably some French
+                        # cards), and without this those runners surface only via
+                        # the silk-less catalogue fallback — see merge_extra_races.
+                        extra_urls = [
+                            _racecard_url(lot.entry)
+                            for lot in all_lots
+                            if lot.entered and lot.entry and lot.entry.race_date == on
+                        ]
                         day_entries, day_off_times = (
                             rp_racecards.fetch_entries_for_uids(
-                                on, uids, target_names=target_names
+                                on, uids,
+                                target_names=target_names,
+                                extra_race_urls=extra_urls,
                             )
                         )
                         log.info("Racecard hits for %s: %d", on, len(day_entries))

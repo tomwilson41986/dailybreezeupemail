@@ -85,6 +85,59 @@ def test_parse_racecards_index_respects_date_filter():
     ) == []
 
 
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("CHANTILLY", "chantilly"),
+        ("Sha Tin", "sha-tin"),
+        ("Newmarket (July)", "newmarket-july"),
+        ("  Saint-Cloud  ", "saint-cloud"),
+        ("", ""),
+        (None, ""),
+    ],
+)
+def test_course_slug(raw, expected):
+    assert rp_racecards.course_slug(raw) == expected
+
+
+def test_merge_extra_races_appends_race_index_omits():
+    """A catalogue race RP's index didn't list is appended so it gets scraped.
+    Mirrors the live Chantilly case where a 2yo grad's race is absent from the
+    index but is a real card with a silk."""
+    on = date(2026, 5, 31)
+    index = [(204, "chantilly", "921867", "https://www.racingpost.com/racecards/204/chantilly/2026-05-31/921867")]
+    extra = ["https://www.racingpost.com/racecards/204/chantilly/2026-05-31/921923"]
+    merged = rp_racecards.merge_extra_races(index, extra, on)
+    assert ("921867" in {ru for _, _, ru, _ in merged})
+    assert ("921923" in {ru for _, _, ru, _ in merged})
+    added = next(r for r in merged if r[2] == "921923")
+    assert added == (
+        204, "chantilly", "921923",
+        "https://www.racingpost.com/racecards/204/chantilly/2026-05-31/921923",
+    )
+
+
+def test_merge_extra_races_dedups_against_index():
+    """A catalogue race already in the index is not queued twice."""
+    on = date(2026, 5, 31)
+    url = "https://www.racingpost.com/racecards/204/chantilly/2026-05-31/921867"
+    index = [(204, "chantilly", "921867", url)]
+    merged = rp_racecards.merge_extra_races(index, [url], on)
+    assert len(merged) == 1
+
+
+def test_merge_extra_races_skips_wrong_date_and_malformed():
+    """URLs for another day, or that don't match the racecard URL shape, are
+    dropped — RP would 404 on them anyway."""
+    on = date(2026, 5, 31)
+    extra = [
+        "https://www.racingpost.com/racecards/204/chantilly/2026-06-01/921999",  # wrong day
+        "https://www.racingpost.com/not-a-racecard",                              # malformed
+        "",
+    ]
+    assert rp_racecards.merge_extra_races([], extra, on) == []
+
+
 def test_parse_racecard_page_entries_matches_target_uid():
     """Alta Regina (uid 9312938) is a confirmed runner at Lingfield 19:12."""
     hits, off_time = _entries({9312938})

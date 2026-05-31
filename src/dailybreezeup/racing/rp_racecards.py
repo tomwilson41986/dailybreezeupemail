@@ -26,6 +26,14 @@ racecards over the entries window and join them against our catalogue lots —
 otherwise a grad declared to run *today* is missed whenever its catalogue
 entry happens to point elsewhere.
 
+The day's race list comes from RP's racecards index, but that index sometimes
+omits a race that genuinely runs (observed on some French cards — a 2yo card
+whose URL never appears in the index sweep). So callers pass the racecard URLs
+their catalogue lots point at for the day; ``merge_extra_races`` folds any the
+index missed into the list to be scraped (deduped), guaranteeing a declared
+runner's silk and live race metadata are picked up rather than falling back to
+the silk-less catalogue row.
+
 Parsers (``parse_racecards_index_race_urls``, ``parse_racecard_page_entries``)
 are pure so tests can run them against captured fixtures.
 """
@@ -103,6 +111,17 @@ class RacecardEntry:
 
 def _course_display(slug: str) -> str:
     return " ".join(w.capitalize() for w in slug.split("-"))
+
+
+def course_slug(name: str | None) -> str:
+    """Slugify a course name for an RP racecard URL path.
+
+    RP's racecard URLs are ``/racecards/<course_uid>/<slug>/<date>/<race_uid>``
+    and the server 404s on a wrong slug, so we have to reproduce its slug from
+    the catalogue's ``course_name`` (e.g. "CHANTILLY" -> "chantilly", "Sha Tin"
+    -> "sha-tin"). Lowercase, runs of non-alphanumerics collapse to a single
+    hyphen, leading/trailing hyphens stripped."""
+    return re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")
 
 
 def normalize_name(name: str | None) -> str:
@@ -253,6 +272,39 @@ def parse_racecard_page_entries(
     return hits, off_time
 
 
+def merge_extra_races(
+    races: list[tuple[int, str, str, str]],
+    extra_urls: Iterable[str],
+    on: date,
+) -> list[tuple[int, str, str, str]]:
+    """Augment the index-derived race list with explicit catalogue race URLs.
+
+    RP's racecards index occasionally omits a race that genuinely runs that day
+    (notably some French cards — e.g. a 2yo newcomers race whose URL never
+    appears in the index sweep). A grad entered in such a race would then be
+    listed only via the catalogue fallback, with no silk or live race metadata.
+
+    ``extra_urls`` are full racecard URLs built from our catalogue lots'
+    ``entry_details`` for ``on``. Each is parsed via ``_RACECARD_PATH_RE`` to
+    recover ``(course_uid, slug, race_uid)``; a URL whose date doesn't match
+    ``on`` or whose shape is malformed is skipped (RP would 404 on it anyway).
+    Races already present in ``races`` are deduped by ``(course_uid, race_uid)``
+    so the index and catalogue never queue the same page twice."""
+    seen: set[tuple[int, str]] = {(cu, ru) for cu, _, ru, _ in races}
+    out = list(races)
+    for url in extra_urls:
+        m = _RACECARD_PATH_RE.search(url or "")
+        if not m or m.group(3) != on.isoformat():
+            continue
+        course_uid, slug, race_uid = int(m.group(1)), m.group(2), m.group(4)
+        key = (course_uid, race_uid)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((course_uid, slug, race_uid, f"{BASE}{m.group(0)}"))
+    return out
+
+
 # ---------- live fetcher ----------
 
 
@@ -280,6 +332,7 @@ def fetch_entries_for_uids(
     target_uids: Iterable[int],
     *,
     target_names: Mapping[str, int | None] | None = None,
+    extra_race_urls: Iterable[str] | None = None,
     sleep: float = 1.2,
     session: requests.Session | None = None,
 ) -> tuple[list[RacecardEntry], dict[str, time]]:
@@ -288,6 +341,12 @@ def fetch_entries_for_uids(
     ``target_uids`` are catalogue horse_uids (authoritative join). ``target_names``
     maps normalized horse names to an expected age (or None) for the name-based
     fallback — used for lots RP hasn't linked a uid to yet.
+
+    ``extra_race_urls`` are racecard URLs built from our catalogue lots'
+    ``entry_details`` for ``on``. They're merged into the index-derived race
+    list (deduped) so a grad entered in a race RP's index omits — e.g. some
+    French cards — still gets scraped, carrying its silk and live race metadata
+    instead of falling back to the silk-less catalogue row.
 
     Returns ``(entries, off_times)`` where ``off_times`` maps ``race_uid`` to
     the page's off-time for every race scanned (not just the ones with a matched
@@ -299,13 +358,17 @@ def fetch_entries_for_uids(
     if not uids and not names:
         return [], {}
     s = session or _make_session()
+    # The index is best-effort: even if it fails or is empty, we still scrape
+    # the explicit catalogue races so a grad declared today isn't dropped just
+    # because the index didn't list (or didn't load) its race.
+    races: list[tuple[int, str, str, str]] = []
     try:
         index_html = _fetch(s, f"{BASE}/racecards/{on.isoformat()}")
+        races = parse_racecards_index_race_urls(index_html, on)
     except Exception as exc:  # noqa: BLE001
         log.warning("RP racecards index fetch failed (%s): %s", on, exc)
-        return [], {}
 
-    races = parse_racecards_index_race_urls(index_html, on)
+    races = merge_extra_races(races, extra_race_urls or [], on)
     if not races:
         log.info("RP racecards: no races on %s", on)
         return [], {}

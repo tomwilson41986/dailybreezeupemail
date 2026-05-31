@@ -278,6 +278,18 @@ def test_racecard_name_fallback_resolves_lot_without_uid():
     assert entered[0]["off_time"] == time(19, 12)
 
 
+def test_racecard_url_builds_canonical_path_from_entry():
+    """The racecard URL fed to the scraper (and shown in the email) must use a
+    correctly slugified course — RP 404s on a wrong slug. CHANTILLY -> chantilly."""
+    entry = rp_sales.EntryDetails(
+        course_uid=204, course_name="CHANTILLY",
+        race_date=date(2026, 5, 31), race_uid=921923,
+    )
+    assert daily._racecard_url(entry) == (
+        "https://www.racingpost.com/racecards/204/chantilly/2026-05-31/921923"
+    )
+
+
 def test_resort_entered_keeps_race_time_order_over_breeze_rating():
     """After sheet enrichment the entries are resorted, but race time must stay
     the primary key — a later race with a higher Breeze Rating must not jump
