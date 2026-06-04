@@ -4,15 +4,19 @@ from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# The barrier-trials watchlist sheet has no canonical default — it's set per
-# deployment via SHEET_CSV_URL. Empty means "no sheet configured", which the
-# daily job treats as a hard error (without a watchlist there's nothing to track).
-DEFAULT_SHEET_CSV_URL = ""
+# The barrier-trials watchlist. Defaults to the user's sheet; override per
+# deployment via SHEET_CSV_URL (the public /export?format=csv endpoint).
+DEFAULT_SHEET_CSV_URL = (
+    "https://docs.google.com/spreadsheets/d/"
+    "1hb7HzyEdZKKmVXtu3p1idPj0ktdo4s67IwAVCZ5njA0/export?format=csv"
+)
 
-# Default sheet column headers. These are deliberately overridable because the
-# user supplies their own watchlist layout (see RATING_COLUMNS / HORSE_NAME_COLUMN).
+# Default sheet column headers, matching the watchlist above. Overridable for a
+# different layout via HORSE_NAME_COLUMN / RATING_COLUMNS. The full row is always
+# reported in the email; RATING_COLUMNS only selects which numeric columns get a
+# tile and drive the season-to-date band/leaderboard tables.
 DEFAULT_HORSE_NAME_COLUMN = "Horse"
-DEFAULT_RATING_COLUMNS = "Rating"
+DEFAULT_RATING_COLUMNS = "Final Rating,TFig"
 
 
 class Settings(BaseSettings):

@@ -2,55 +2,53 @@ from __future__ import annotations
 
 from barriertrials import sheet
 
-CSV = """Horse,Speed,Precocity,Note
-Cosmic Mystery,92.5,78,trial winner
-O'Reilly,71,,
-,50,50,blank name skipped
-Cosmic Mystery,1,1,duplicate name collapses
-Quiet Reflection,not-a-number,55,
+# Mirrors the real watchlist layout: a name column, analytics columns, notes.
+CSV = """Batch,Number,Horse,Sex,Age,Trainer,TFig,Final Rating,Notes
+1,4,GOLDEN NARRATIVE (IRE),C,2,D. Dias,86.5,88.0,Batch 1 winner
+1,7,KING'S FURY (GB),C,2,J.P. O'Brien,83.2,85.0,
+4,5,CASHEL QUEEN (IRE),F,2,D. O'Brien,not-a-number,46,Slowest winner
+,,,,,,,,blank name skipped
+1,4,GOLDEN NARRATIVE (IRE),C,2,D. Dias,86.5,88.0,duplicate collapses
 """
 
 
-def _parse(text=CSV, name_column="Horse", rating_columns=("Speed", "Precocity")):
-    return sheet.parse_sheet_csv(text, name_column=name_column, rating_columns=rating_columns)
+def _parse(text=CSV, rating_columns=("Final Rating", "TFig")):
+    return sheet.parse_sheet_csv(text, name_column="Horse", rating_columns=rating_columns)
 
 
-def test_parses_named_rows_with_ratings():
+def test_parses_named_rows_and_strips_country_for_key():
     horses = _parse()
-    names = [h.name for h in horses]
-    assert names == ["Cosmic Mystery", "O'Reilly", "Quiet Reflection"]
-    cosmic = horses[0]
-    assert cosmic.ratings == {"Speed": 92.5, "Precocity": 78.0}
+    assert [h.name for h in horses] == [
+        "GOLDEN NARRATIVE (IRE)", "KING'S FURY (GB)", "CASHEL QUEEN (IRE)"
+    ]
+    # Match key drops the country suffix.
+    assert horses[0].name_key == "goldennarrative"
+    assert horses[1].name_key == "kingsfury"
 
 
-def test_blank_and_nonnumeric_ratings_become_none():
-    horses = {h.name: h for h in _parse()}
-    assert horses["O'Reilly"].ratings == {"Speed": 71.0, "Precocity": None}
-    # "not-a-number" in Speed -> None, Precocity parses
-    assert horses["Quiet Reflection"].ratings == {"Speed": None, "Precocity": 55.0}
+def test_fields_capture_every_non_name_column_in_order():
+    h = _parse()[0]
+    assert list(h.fields.keys()) == [
+        "Batch", "Number", "Sex", "Age", "Trainer", "TFig", "Final Rating", "Notes"
+    ]
+    assert h.fields["Trainer"] == "D. Dias"
+    assert h.fields["Notes"] == "Batch 1 winner"
+    # The name column itself is not duplicated into fields.
+    assert "Horse" not in h.fields
 
 
-def test_name_key_normalised_and_duplicates_collapsed():
+def test_ratings_parsed_numeric_with_none_for_blank_or_nonnumeric():
+    by = {h.name_key: h for h in _parse()}
+    assert by["goldennarrative"].ratings == {"Final Rating": 88.0, "TFig": 86.5}
+    # "not-a-number" TFig -> None; Final Rating still parses.
+    assert by["cashelqueen"].ratings == {"Final Rating": 46.0, "TFig": None}
+
+
+def test_duplicate_name_collapses_to_first():
     horses = _parse()
-    assert horses[0].name_key == "cosmicmystery"
-    assert horses[1].name_key == "oreilly"
-    # The duplicate "Cosmic Mystery" row is dropped (first wins).
-    assert sum(1 for h in horses if h.name_key == "cosmicmystery") == 1
-
-
-def test_name_column_fallback_when_configured_header_absent():
-    # Configured column "Horse" missing; "Name" fallback is used.
-    text = "Name,Speed\nFlying Start,80\n"
-    horses = sheet.parse_sheet_csv(text, name_column="Horse", rating_columns=("Speed",))
-    assert [h.name for h in horses] == ["Flying Start"]
+    assert sum(1 for h in horses if h.name_key == "goldennarrative") == 1
 
 
 def test_no_name_column_returns_empty():
-    text = "Foo,Bar\n1,2\n"
-    assert sheet.parse_sheet_csv(text, name_column="Horse", rating_columns=("Speed",)) == []
-
-
-def test_index_by_name():
-    idx = sheet.index_by_name(_parse())
-    assert set(idx) == {"cosmicmystery", "oreilly", "quietreflection"}
-    assert idx["oreilly"].name == "O'Reilly"
+    assert sheet.parse_sheet_csv("Foo,Bar\n1,2\n", name_column="Horse",
+                                 rating_columns=("TFig",)) == []

@@ -45,6 +45,17 @@ def _fmt_ratings(ratings: dict[str, Any] | None) -> str:
     return "  ·  ".join(parts)
 
 
+def _fmt_fields(fields: dict[str, Any] | None) -> list[str]:
+    """One ``Label: value`` per non-empty column, wrapped a few per line."""
+    if not fields:
+        return []
+    pairs = [f"{label}: {value}" for label, value in fields.items() if value not in (None, "")]
+    out: list[str] = []
+    for i in range(0, len(pairs), 3):
+        out.append("    " + "   ".join(pairs[i:i + 3]))
+    return out
+
+
 def _fmt_card(row: dict[str, Any], *, ran: bool) -> list[str]:
     horse_label = row.get("horse_name") or "(unnamed)"
     lines: list[str] = [_DIVIDER, horse_label]
@@ -73,6 +84,7 @@ def _fmt_card(row: dict[str, Any], *, ran: bool) -> list[str]:
             f"    ► {row['race_date']:%a %d %b} · {time_prefix}{row['course']}{race_suffix}"
         )
 
+    lines.extend(_fmt_fields(row.get("fields")))
     lines.append(f"    {row['race_url']}")
     return lines
 

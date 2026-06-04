@@ -17,7 +17,11 @@ def _entered_row():
         "race_name": "Maiden Stakes",
         "race_url": "https://www.racingpost.com/racecards/x",
         "silk_url": None,
-        "ratings": {"Speed": 92.0, "Precocity": 78.0},
+        "ratings": {"Final Rating": 92.0, "TFig": 78.0},
+        "fields": {
+            "Batch": "1", "Trainer": "D. Dias",
+            "Final Rating": "92.0", "Notes": "trial winner",
+        },
     }
 
 
@@ -37,9 +41,10 @@ def _ran_row(**over):
         "rpr": 88,
         "race_url": "https://www.racingpost.com/results/x",
         "silk_url": None,
-        "Speed": 92.0,
-        "Precocity": 78.0,
-        "ratings": {"Speed": 92.0, "Precocity": 78.0},
+        "Final Rating": 92.0,
+        "TFig": 78.0,
+        "ratings": {"Final Rating": 92.0, "TFig": 78.0},
+        "fields": {"Batch": "1", "Trainer": "D. Dias", "Notes": "winner"},
     }
     base.update(over)
     return base
@@ -53,15 +58,19 @@ def test_morning_renders_entries_only():
     assert "entries" in payload.subject.lower()
     assert "Cosmic Mystery" in payload.html
     assert "Cosmic Mystery" in payload.text
-    # Rating tiles surface both configured ratings by their header label.
-    assert "Speed" in payload.html and "Precocity" in payload.html
+    # Rating tiles surface the configured ratings by their header label.
+    assert "Final Rating" in payload.html and "TFig" in payload.html
+    # Every sheet column is reported in the card (full row).
+    assert "Trainer" in payload.html and "D. Dias" in payload.html
+    assert "Notes" in payload.html and "trial winner" in payload.html
+    assert "Trainer: D. Dias" in payload.text
     # Morning never shows the results-only "Ran today" heading.
     assert "Ran today" not in payload.html
 
 
 def test_evening_renders_results_and_season_summary():
     rows = [_ran_row()]
-    summary = build_summary(rows, ["Speed", "Precocity"])
+    summary = build_summary(rows, ["Final Rating", "TFig"])
     payload = render(
         run_date=date(2026, 5, 1), entered=[], ran_today=rows,
         mode="evening", season_summary=summary,
@@ -69,8 +78,8 @@ def test_evening_renders_results_and_season_summary():
     assert "results" in payload.subject.lower()
     assert "Ran today" in payload.html
     assert "Season to date" in payload.html
-    assert "Form by Speed" in payload.html
-    assert "Top 10 by Precocity" in payload.html
+    assert "Form by Final Rating" in payload.html
+    assert "Top 10 by TFig" in payload.html
 
 
 def test_evening_empty_shows_no_results_placeholder():
@@ -82,4 +91,4 @@ def test_evening_empty_shows_no_results_placeholder():
 
 
 def test_build_summary_none_when_empty():
-    assert build_summary([], ["Speed"]) is None
+    assert build_summary([], ["Final Rating"]) is None

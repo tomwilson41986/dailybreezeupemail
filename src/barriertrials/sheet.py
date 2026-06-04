@@ -1,14 +1,18 @@
 """Watchlist sheet ingestion for the barrier-trial tracker.
 
-The user maintains a Google Sheet of horses that ran in barrier trials, with a
-horse-name column and one or more proprietary rating columns. Those rows are the
-canonical cohort — unlike the breeze-up job there is no sale catalogue handing us
-a Racing Post ``horse_uid``, so the watchlist is keyed purely on the **normalised
-horse name** and the uid is learned later, the first time the horse appears on a
-racecard or result (see ``daily.py``).
+The user maintains a Google Sheet of horses that ran in barrier trials. Each row
+is one horse with a name column, a set of analytics/rating columns, and free-text
+notes. Those rows are the canonical cohort — unlike the breeze-up job there is no
+sale catalogue handing us a Racing Post ``horse_uid``, so the watchlist is keyed
+purely on the **normalised horse name** (country suffix stripped, see
+``names.horse_key``) and the uid is learned later, the first time the horse
+appears on a racecard or result (see ``daily.py``).
 
-The sheet is read as CSV via the public ``/export?format=csv`` endpoint — no auth,
-no service account. Set ``SHEET_CSV_URL`` to point at the watchlist.
+We surface *every* column of the matched row in the email (``fields``), and parse
+the configured rating columns to numbers (``ratings``) for the rating tiles and
+the season-to-date band/leaderboard tables.
+
+The sheet is read as CSV via the public ``/export?format=csv`` endpoint — no auth.
 """
 from __future__ import annotations
 
@@ -16,12 +20,12 @@ import csv
 import io
 import logging
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from dailybreezeup.racing.rp_racecards import normalize_name
+from barriertrials.names import horse_key
 
 log = logging.getLogger(__name__)
 
@@ -37,9 +41,14 @@ _NAME_COLUMN_FALLBACKS: tuple[str, ...] = ("Horse", "Horse Name", "Name")
 
 @dataclass(frozen=True)
 class TrackedHorse:
-    name: str                         # display name exactly as typed in the sheet
-    name_key: str                     # normalised join key (see normalize_name)
-    ratings: dict[str, float | None]  # {rating column header: value}, ordered
+    name: str                          # display name exactly as typed in the sheet
+    name_key: str                      # normalised join key (see names.horse_key)
+    # Every non-name column, in sheet order, as raw strings — shown verbatim in
+    # the email so the recipient sees the full table row next to the entry/result.
+    fields: dict[str, str] = field(default_factory=dict)
+    # The configured rating columns parsed to floats (None when blank/non-numeric)
+    # — drives the rating tiles and the season-to-date aggregations.
+    ratings: dict[str, float | None] = field(default_factory=dict)
 
 
 def _as_float(x: str | None) -> float | None:
@@ -72,8 +81,9 @@ def parse_sheet_csv(
 ) -> list[TrackedHorse]:
     """Parse the CSV body into one ``TrackedHorse`` per named row.
 
-    Rows with a blank name are skipped. Rating cells that are blank or
-    non-numeric become ``None`` (rendered as a dash, excluded from averages).
+    Rows with a blank name are skipped; duplicate names collapse to the first row.
+    ``fields`` keeps every column except the name column, in sheet order. Rating
+    cells that are blank or non-numeric become ``None``.
     """
     reader = csv.DictReader(io.StringIO(text))
     name_col = _resolve_name_column(reader.fieldnames, name_column)
@@ -83,6 +93,9 @@ def parse_sheet_csv(
             name_column, list(_NAME_COLUMN_FALLBACKS),
         )
         return []
+    # Column order for the per-horse field grid: every header except the name
+    # column (and any stray empty header csv emits for trailing commas).
+    display_cols = [c for c in (reader.fieldnames or []) if c and c != name_col]
 
     horses: list[TrackedHorse] = []
     seen: set[str] = set()
@@ -90,14 +103,13 @@ def parse_sheet_csv(
         name = (raw.get(name_col) or "").strip()
         if not name:
             continue
-        key = normalize_name(name)
+        key = horse_key(name)
         if not key or key in seen:
-            # Duplicate names collapse to the first row — a watchlist shouldn't
-            # list the same horse twice, and a stable key keeps matching sane.
             continue
         seen.add(key)
+        fields = {col: (raw.get(col) or "").strip() for col in display_cols}
         ratings = {col: _as_float(raw.get(col)) for col in rating_columns}
-        horses.append(TrackedHorse(name=name, name_key=key, ratings=ratings))
+        horses.append(TrackedHorse(name=name, name_key=key, fields=fields, ratings=ratings))
     return horses
 
 

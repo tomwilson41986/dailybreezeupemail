@@ -42,11 +42,12 @@ from barriertrials.db import (
     upsert_tracked_horse,
 )
 from barriertrials.emailer import EmailPayload, render, send
+from barriertrials.names import horse_key
 from barriertrials.racing import rp_results
 from barriertrials.racing.rp_results import ResultHit
 from barriertrials.sheet import TrackedHorse
 from dailybreezeup.racing import rp_racecards
-from dailybreezeup.racing.rp_racecards import RacecardEntry, normalize_name
+from dailybreezeup.racing.rp_racecards import RacecardEntry
 
 log = logging.getLogger("barriertrials.daily")
 UK = ZoneInfo("Europe/London")
@@ -80,6 +81,7 @@ def _entered_row_from_racecard(horse: TrackedHorse, entry: RacecardEntry) -> dic
         "race_url": entry.race_url,
         "silk_url": entry.silk_url,
         "ratings": dict(horse.ratings),
+        "fields": dict(horse.fields),
     }
 
 
@@ -101,6 +103,7 @@ def _ran_row(horse: TrackedHorse, hit: ResultHit) -> dict[str, Any]:
         "silk_url": hit.silk_url,
         "season_year": hit.race_date.year,
         "ratings": dict(horse.ratings),
+        "fields": dict(horse.fields),
     }
 
 
@@ -118,7 +121,7 @@ def _resolve_key(
     if uid is not None and uid in uid_to_key:
         return uid_to_key[uid]
     if horse_name:
-        key = normalize_name(horse_name)
+        key = horse_key(horse_name)
         if key in by_name:
             return key
     return None
@@ -291,14 +294,21 @@ def _default_mode(now: datetime | None = None) -> str:
 def _demo_watchlist(settings: Settings) -> list[TrackedHorse]:
     cols = settings.rating_column_list or ["Rating"]
     samples = [
-        ("Cosmic Mystery", [92.0, 78.0]),
-        ("Fighter's Spirit", [71.0, 64.0]),
-        ("Quiet Reflection", [48.0, 55.0]),
+        ("Golden Narrative (IRE)", [88.0, 86.5],
+         {"Batch": "1", "Trainer": "D. Dias", "Notes": "Batch 1 winner"}),
+        ("King's Fury (GB)", [85.0, 83.2],
+         {"Batch": "1", "Trainer": "J.P. O'Brien", "Notes": ""}),
+        ("Cashel Queen (IRE)", [46.0, 43.0],
+         {"Batch": "4", "Trainer": "D. O'Brien", "Notes": "Slowest winner"}),
     ]
     horses: list[TrackedHorse] = []
-    for name, values in samples:
+    for name, values, extra in samples:
         ratings = {col: (values[i] if i < len(values) else None) for i, col in enumerate(cols)}
-        horses.append(TrackedHorse(name=name, name_key=normalize_name(name), ratings=ratings))
+        tiles = {col: f"{ratings[col]:.1f}" for col in cols if ratings[col] is not None}
+        fields = {**extra, **tiles}
+        horses.append(
+            TrackedHorse(name=name, name_key=horse_key(name), fields=fields, ratings=ratings)
+        )
     return horses
 
 
@@ -318,6 +328,7 @@ def _demo_rows(settings: Settings, *, ran: bool) -> list[dict[str, Any]]:
             "race_url": "https://www.racingpost.com/",
             "silk_url": None,
             "ratings": dict(h.ratings),
+            "fields": dict(h.fields),
         }
         if ran:
             base.update({

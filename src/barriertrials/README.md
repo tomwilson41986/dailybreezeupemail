@@ -3,9 +3,15 @@
 A parallel pipeline to the breeze-up job (`dailybreezeup`), tracking a watchlist
 of barrier-trial horses on Racing Post. Same shape — a morning entries email and
 an evening results + season-to-date email — but the cohort comes from a Google
-Sheet of **horse names + ratings** rather than a sale catalogue, and matching is
+Sheet of barrier-trial horses rather than a sale catalogue, and matching is
 **name-first**: a horse's Racing Post `horse_uid` is learned the first time it
 shows up on a racecard/result and reused thereafter.
+
+Match key: the horse name with its country suffix stripped (`GOLDEN NARRATIVE
+(IRE)` → `goldennarrative`), since RP's runner names don't carry the suffix (see
+`names.horse_key`). **Every column of the matched sheet row is reported** in the
+entry/result card; `RATING_COLUMNS` only selects which numeric columns also get a
+headline tile and drive the season-to-date band/leaderboard tables.
 
 It reuses the breeze-up code where that code is cohort-agnostic
 (`dailybreezeup.racing.rp_racecards`, `dailybreezeup.silks`,
