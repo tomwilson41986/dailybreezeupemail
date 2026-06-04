@@ -18,6 +18,9 @@ DEFAULT_SHEET_CSV_URL = (
 DEFAULT_HORSE_NAME_COLUMN = "Horse"
 DEFAULT_RATING_COLUMNS = "Final Rating,TFig"
 
+# First result date the season-to-date views cover.
+DEFAULT_SEASON_START_DATE = date(2026, 4, 1)
+
 
 class Settings(BaseSettings):
     """Configuration for the barrier-trial horse tracker.
@@ -48,7 +51,7 @@ class Settings(BaseSettings):
     # First result date the season-to-date summary should cover. The evening run
     # self-heals the archive back to this date (see daily._ensure_season_archive),
     # so horses that ran before tracking began still count.
-    season_start_date: date = Field(default=date(2026, 4, 1))
+    season_start_date: date = Field(default=DEFAULT_SEASON_START_DATE)
 
     sheet_csv_url: str = DEFAULT_SHEET_CSV_URL
     # The sheet's horse-name column header. The watchlist key is the normalised
@@ -57,6 +60,15 @@ class Settings(BaseSettings):
     # Comma-separated list of the sheet's rating column headers. Each is surfaced
     # as a tile in the email and gets its own season-to-date band/leaderboard.
     rating_columns: str = DEFAULT_RATING_COLUMNS
+
+    @field_validator("sheet_csv_url", mode="before")
+    @classmethod
+    def _sheet_url_default(cls, v: object) -> object:
+        # GitHub Actions expands an unset `${{ vars.BT_SHEET_CSV_URL }}` to "",
+        # which would otherwise blank the watchlist URL and silently track nothing.
+        if isinstance(v, str) and not v.strip():
+            return DEFAULT_SHEET_CSV_URL
+        return v
 
     @field_validator("horse_name_column", mode="before")
     @classmethod
@@ -72,6 +84,15 @@ class Settings(BaseSettings):
     def _rating_cols_default(cls, v: object) -> object:
         if isinstance(v, str) and not v.strip():
             return DEFAULT_RATING_COLUMNS
+        return v
+
+    @field_validator("season_start_date", mode="before")
+    @classmethod
+    def _season_start_default(cls, v: object) -> object:
+        # GitHub Actions expands an unset `${{ vars.BT_SEASON_START_DATE }}` to
+        # "", which can't parse as a date — fall back to the default.
+        if isinstance(v, str) and not v.strip():
+            return DEFAULT_SEASON_START_DATE
         return v
 
     @property
