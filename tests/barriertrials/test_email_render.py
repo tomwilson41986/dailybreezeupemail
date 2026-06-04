@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, time
 
 from barriertrials.emailer import render
-from barriertrials.stats import build_summary
+from barriertrials.stats import build_tracker
 
 
 def _entered_row():
@@ -50,36 +50,45 @@ def _ran_row(**over):
     return base
 
 
-def test_morning_renders_entries_only():
+def test_morning_renders_entries_with_history():
+    row = _entered_row()
+    row["history"] = [
+        {"race_date": date(2026, 4, 10), "course": "Naas", "race_name": "Maiden",
+         "finishing_position": "2", "total_runners": 9, "sp": "5/2", "rpr": 80},
+    ]
     payload = render(
-        run_date=date(2026, 5, 1), entered=[_entered_row()], ran_today=[],
-        mode="morning",
+        run_date=date(2026, 5, 1), entered=[row], ran_today=[], mode="morning",
     )
     assert "entries" in payload.subject.lower()
     assert "Cosmic Mystery" in payload.html
-    assert "Cosmic Mystery" in payload.text
     # Rating tiles surface the configured ratings by their header label.
     assert "Final Rating" in payload.html and "TFig" in payload.html
     # Every sheet column is reported in the card (full row).
     assert "Trainer" in payload.html and "D. Dias" in payload.html
     assert "Notes" in payload.html and "trial winner" in payload.html
     assert "Trainer: D. Dias" in payload.text
+    # Historic results-so-far block renders for the entry.
+    assert "Results so far" in payload.html
+    assert "Naas" in payload.html and "Naas" in payload.text
     # Morning never shows the results-only "Ran today" heading.
     assert "Ran today" not in payload.html
 
 
-def test_evening_renders_results_and_season_summary():
+def test_evening_renders_results_and_historic_tracker():
     rows = [_ran_row()]
-    summary = build_summary(rows, ["Final Rating", "TFig"])
+    tracker = build_tracker(rows, ["Final Rating", "TFig"])
+    tracker["season_start"] = "01 Apr 2026"
     payload = render(
         run_date=date(2026, 5, 1), entered=[], ran_today=rows,
-        mode="evening", season_summary=summary,
+        mode="evening", season_summary=tracker,
     )
     assert "results" in payload.subject.lower()
     assert "Ran today" in payload.html
-    assert "Season to date" in payload.html
-    assert "Form by Final Rating" in payload.html
-    assert "Top 10 by TFig" in payload.html
+    assert "Historic results" in payload.html
+    assert "Performance by Final Rating band" in payload.html
+    # Per-horse tracker lists the horse and its runs.
+    assert "Tracked horses" in payload.html
+    assert "Cosmic Mystery" in payload.html
 
 
 def test_evening_empty_shows_no_results_placeholder():
@@ -90,5 +99,18 @@ def test_evening_empty_shows_no_results_placeholder():
     assert "No Results Today" in payload.subject
 
 
-def test_build_summary_none_when_empty():
-    assert build_summary([], ["Final Rating"]) is None
+def test_build_tracker_none_when_empty():
+    assert build_tracker([], ["Final Rating"]) is None
+
+
+def test_build_tracker_groups_runs_per_horse():
+    rows = [
+        _ran_row(race_uid="1", race_date=date(2026, 4, 1), finishing_position="1"),
+        _ran_row(race_uid="2", race_date=date(2026, 4, 20), finishing_position="3"),
+    ]
+    tracker = build_tracker(rows, ["Final Rating", "TFig"])
+    assert tracker["total_runs"] == 2
+    assert len(tracker["horses"]) == 1
+    rec = tracker["horses"][0]
+    assert rec.n_runs == 2 and rec.n_wins == 1 and rec.n_places == 1
+    assert [r.race_date for r in rec.runs] == [date(2026, 4, 1), date(2026, 4, 20)]

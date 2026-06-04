@@ -441,12 +441,14 @@ def run(
             entered = _filter_already_sent(conn, today, "entered", entered)
             ran = _filter_already_sent(conn, today, "ran_today", ran)
 
-        # Persist today's results, then self-heal the season archive so the
-        # summary covers horses that ran before tracking began (or before a CI
-        # cache eviction). Idempotent on (horse_key, race_uid). Demo skips it.
-        if mode == "evening" and not demo:
-            for row in ran:
-                upsert_result_row(conn, row)
+        # Keep the season archive current so both emails can show historic form.
+        # Evening upserts today's live results first; the per-day scrape log is
+        # shared between modes, so only one run does the heavy season walk each
+        # day (and a missed evening self-heals on the next morning). Demo skips it.
+        if not demo and by_name:
+            if mode == "evening":
+                for row in ran:
+                    upsert_result_row(conn, row)
             try:
                 learned_now = learned_uid_map(conn)
                 fill = _ensure_season_archive(
@@ -455,22 +457,37 @@ def run(
                     today=today,
                     by_name=by_name,
                     learned=learned_now,
+                    mark_today=(mode == "evening"),
                 )
                 if fill["days_scraped"]:
                     log.info(
-                        "season backfill: scraped %d historical day(s), +%d archive row(s)",
+                        "season backfill: scraped %d day(s), +%d archive row(s)",
                         fill["days_scraped"], fill["rows_added"],
                     )
                 diagnostics["season_backfill_days"] = fill["days_scraped"]
                 diagnostics["season_backfill_rows"] = fill["rows_added"]
             except Exception as exc:  # noqa: BLE001
-                log.warning("season backfill failed (%s): summary may be incomplete", exc)
+                log.warning("season backfill failed (%s): history may be incomplete", exc)
 
+        # Build the historic views from the archive: morning attaches each
+        # entered horse's results-so-far; evening builds the season tracker.
         season_summary = None
-        if mode == "evening":
-            season_summary = _load_season_summary(conn, today.year, settings.rating_column_list)
-            if season_summary:
-                diagnostics["season_runs"] = season_summary["total_runs"]
+        if demo:
+            if mode == "morning":
+                _demo_attach_history(entered)
+            else:
+                season_summary = _demo_tracker(settings, ran)
+        else:
+            archive_rows = _archive_rows(conn, today.year)
+            if mode == "morning":
+                _attach_history(entered, archive_rows)
+            else:
+                season_summary = stats_mod.build_tracker(
+                    archive_rows, settings.rating_column_list
+                )
+        if season_summary:
+            season_summary["season_start"] = settings.season_start_date.strftime("%d %b %Y")
+            diagnostics["season_runs"] = season_summary["total_runs"]
 
         payload = render(
             run_date=today,
@@ -515,11 +532,18 @@ def run(
     return 0 if status in ("ok", "dry_run") else 1
 
 
-def _load_season_summary(
-    conn: sqlite3.Connection, year: int, rating_columns: list[str]
-) -> dict[str, Any] | None:
-    """Read the season's archive rows and merge each row's ratings_json blob so
-    stats can bucket by the (user-defined) rating column headers."""
+def _to_date(v: Any) -> date | None:
+    if isinstance(v, date):
+        return v
+    try:
+        return date.fromisoformat(str(v)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def _archive_rows(conn: sqlite3.Connection, year: int) -> list[dict[str, Any]]:
+    """Season archive rows as dicts, with each row's ratings_json merged back in
+    so stats can bucket by the (user-defined) rating column headers."""
     rows: list[dict[str, Any]] = []
     for r in conn.execute(
         "SELECT * FROM results_archive WHERE season_year = ?", (year,)
@@ -530,7 +554,53 @@ def _load_season_summary(
         except (TypeError, ValueError):
             pass
         rows.append(d)
-    return stats_mod.build_summary(rows, rating_columns)
+    return rows
+
+
+def _attach_history(entered: list[dict[str, Any]], archive_rows: list[dict[str, Any]]) -> None:
+    """Attach each entered horse's season-to-date results as ``row['history']``
+    (oldest first), so the morning email can show form under the entry."""
+    by_key: dict[str, list[dict[str, Any]]] = {}
+    for r in archive_rows:
+        by_key.setdefault(r.get("horse_key"), []).append(r)
+    for runs in by_key.values():
+        runs.sort(key=lambda r: str(r.get("race_date") or ""))
+    for row in entered:
+        row["history"] = [
+            {
+                "race_date": _to_date(r.get("race_date")),
+                "course": r.get("course"),
+                "race_name": r.get("race_name"),
+                "finishing_position": r.get("finishing_position"),
+                "total_runners": r.get("total_runners"),
+                "sp": r.get("sp"),
+                "rpr": r.get("rpr"),
+            }
+            for r in by_key.get(row["horse_key"], [])
+        ]
+
+
+def _demo_attach_history(entered: list[dict[str, Any]]) -> None:
+    for i, row in enumerate(entered):
+        row["history"] = [
+            {"race_date": date.today() - timedelta(days=45 - i), "course": "Curragh",
+             "race_name": "EBF Maiden", "finishing_position": ["2", "1", "5"][i % 3],
+             "total_runners": 10, "sp": ["5/2", "3/1", "12/1"][i % 3],
+             "rpr": [78, 84, None][i % 3]},
+            {"race_date": date.today() - timedelta(days=20 - i), "course": "Naas",
+             "race_name": "Median Auction Maiden", "finishing_position": ["1", "3", "8"][i % 3],
+             "total_runners": 9, "sp": ["6/4", "9/2", "20/1"][i % 3],
+             "rpr": [86, 80, None][i % 3]},
+        ]
+
+
+def _demo_tracker(settings: Settings, ran: list[dict[str, Any]]) -> dict[str, Any] | None:
+    rows: list[dict[str, Any]] = []
+    for r in ran:
+        d = dict(r)
+        d.update(r.get("ratings") or {})
+        rows.append(d)
+    return stats_mod.build_tracker(rows, settings.rating_column_list)
 
 
 # ---------- season archive backfill ----------
@@ -571,12 +641,15 @@ def _ensure_season_archive(
     today: date,
     by_name: dict[str, TrackedHorse],
     learned: dict[str, int],
+    mark_today: bool = True,
 ) -> dict[str, int]:
     """Walk every result date in ``[season_start, today)`` not yet recorded in
     ``results_scrape_log`` and write matching outcomes to ``results_archive``.
 
-    Today is covered by the live evening fetch upstream, so it's marked scraped
-    here without re-walking."""
+    ``mark_today`` is set by the evening run, whose live fetch already covers
+    today, so today is marked scraped without re-walking. The morning run passes
+    ``mark_today=False`` (today's races haven't run yet); leaving today unmarked
+    also means a missed evening self-heals when tomorrow's walk reaches it."""
     if season_start > today:
         return {"days_scraped": 0, "rows_added": 0}
     already = scraped_result_dates(conn)
@@ -589,7 +662,8 @@ def _ensure_season_archive(
             mark_result_date_scraped(conn, iso)
             days_scraped += 1
         day += timedelta(days=1)
-    mark_result_date_scraped(conn, today.isoformat())
+    if mark_today:
+        mark_result_date_scraped(conn, today.isoformat())
     return {"days_scraped": days_scraped, "rows_added": rows_added}
 
 

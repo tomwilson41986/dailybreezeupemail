@@ -1,11 +1,25 @@
 # Barrier-trial tracker
 
 A parallel pipeline to the breeze-up job (`dailybreezeup`), tracking a watchlist
-of barrier-trial horses on Racing Post. Same shape — a morning entries email and
-an evening results + season-to-date email — but the cohort comes from a Google
-Sheet of barrier-trial horses rather than a sale catalogue, and matching is
-**name-first**: a horse's Racing Post `horse_uid` is learned the first time it
-shows up on a racecard/result and reused thereafter.
+of barrier-trial horses on Racing Post. The cohort comes from a Google Sheet of
+barrier-trial horses (not a sale catalogue), and matching is **name-first**: a
+horse's Racing Post `horse_uid` is learned the first time it shows up on a
+racecard/result and reused thereafter.
+
+Two emails:
+
+* **Morning (entries):** each horse entered/declared in the next few days, with
+  its full sheet row, **plus that horse's results so far this season** (since
+  `SEASON_START_DATE`).
+* **Evening (results):** today's results with the full sheet row, then a
+  **historic results tracker** — performance per rating band, and every tracked
+  horse that has run with its individual results.
+
+Both read from `results_archive`, which the evening run self-heals back to
+`SEASON_START_DATE`; the morning run also tops it up (the two share a per-day
+scrape log, so only one does the heavy season walk each day). To seed it
+immediately on a fresh deployment, run once:
+`barriertrials-daily --backfill-from 2026-04-01`.
 
 Match key: the horse name with its country suffix stripped (`GOLDEN NARRATIVE
 (IRE)` → `goldennarrative`), since RP's runner names don't carry the suffix (see
