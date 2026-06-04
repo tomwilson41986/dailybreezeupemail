@@ -91,8 +91,13 @@ jobs:
       # Persist the SQLite DB (email_log + results_archive + tracked_horses)
       # across runs so the season-to-date summary accumulates and learned uids
       # survive. Cache key is unique per run; restore-keys prefix pulls latest.
+      #
+      # Restore and save are split so the DB is saved even when the job FAILS:
+      # the default actions/cache post-step only saves on success, which meant a
+      # failed send discarded the ~1.5h season backfill and forced a full
+      # re-walk on the next run. The save step below runs with if: always().
       - name: Restore DB cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             data/barriertrials.sqlite
@@ -113,6 +118,17 @@ jobs:
             if [ "${{ github.event.inputs.demo }}" = "true" ]; then args="$args --demo"; fi
             python -m barriertrials.daily $args
           fi
+
+      # Save even on failure so the expensive season backfill persists.
+      - name: Save DB cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/barriertrials.sqlite
+            data/barriertrials.sqlite-shm
+            data/barriertrials.sqlite-wal
+          key: barriertrials-db-v1-${{ github.run_id }}
 
       - name: Job summary
         if: always()
