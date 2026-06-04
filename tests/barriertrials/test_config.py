@@ -40,3 +40,10 @@ def test_explicit_values_are_respected():
 def test_email_to_list_dedups_case_insensitively():
     s = Settings(email_to="A@x.com, b@y.com, a@x.com")
     assert s.email_to_list == ["A@x.com", "b@y.com"]
+
+
+def test_email_to_list_splits_on_semicolons_and_newlines():
+    # Outlook-style semicolons (and stray newlines) must split, not produce
+    # one malformed recipient that the SMTP server rejects.
+    s = Settings(email_to="a@x.com; b@y.com\n c@z.com")
+    assert s.email_to_list == ["a@x.com", "b@y.com", "c@z.com"]
