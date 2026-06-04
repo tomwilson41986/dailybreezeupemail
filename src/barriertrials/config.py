@@ -1,3 +1,4 @@
+import re
 from datetime import date
 from pathlib import Path
 
@@ -101,7 +102,10 @@ class Settings(BaseSettings):
 
     @property
     def email_to_list(self) -> list[str]:
-        configured = [x.strip() for x in self.email_to.split(",") if x.strip()]
+        # Accept comma-, semicolon- or newline-separated lists (Outlook-style
+        # semicolons are common). Without this a semicolon-joined EMAIL_TO
+        # becomes one malformed recipient that the SMTP server rejects outright.
+        configured = [x.strip() for x in re.split(r"[,;\n]+", self.email_to) if x.strip()]
         merged: list[str] = []
         seen: set[str] = set()
         for addr in configured:
