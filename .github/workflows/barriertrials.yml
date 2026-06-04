@@ -1,0 +1,149 @@
+name: barrier-trial-tracker
+
+# Tracks a watchlist of barrier-trial horses (Google Sheet of names + ratings)
+# on Racing Post. Independent of the breeze-up job — its own DB, sheet and
+# recipients — but shares the Gmail SMTP secrets.
+#   04:00 UTC - morning run (--mode morning): entries & declarations in the
+#               next few days. Suppressed when empty unless notify_on_empty=true.
+#   21:00 UTC - evening run (--mode evening): results that ran today. Always
+#               sends, even on a quiet day (subject: "No Results Today").
+#
+# Matching is name-first: a horse's Racing Post uid is learned the first time it
+# appears on a racecard/result and reused thereafter. RP's Fastly bot filter
+# rejects the default requests TLS fingerprint from CI IPs, so the scrapers use
+# curl_cffi (impersonate=chrome124) — see the breeze-up workflow for history.
+on:
+  schedule:
+    - cron: "0 4 * * *"
+    - cron: "0 21 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "YYYY-MM-DD to process (default: today UK)"
+        required: false
+      dry_run:
+        description: "Render but do not send"
+        required: false
+        default: "false"
+      demo:
+        description: "Skip live fetch; render synthetic rows for layout checks"
+        required: false
+        default: "false"
+      mode:
+        description: "morning (entries) or evening (results). Blank = pick from time of day."
+        required: false
+        type: choice
+        options: ["", "morning", "evening"]
+        default: ""
+      entries_window_days:
+        description: "Override forward window (days). Blank = use repo default (3)."
+        required: false
+      notify_on_empty:
+        description: "Send 'no horses today' email if total=0. Blank = use repo default. Type 'true' or 'false'."
+        required: false
+      backfill_from:
+        description: "One-shot historical scrape from this YYYY-MM-DD through today into results_archive. Doesn't send email."
+        required: false
+        default: ""
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/London
+      GMAIL_USER:         ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      EMAIL_FROM:         ${{ secrets.EMAIL_FROM }}
+      # This cohort's own recipients (no baked-in list). Falls back to the
+      # shared EMAIL_TO secret if the barrier-trials-specific one isn't set.
+      EMAIL_TO:           ${{ secrets.BT_EMAIL_TO || secrets.EMAIL_TO }}
+      NOTIFY_ON_EMPTY: >-
+        ${{ github.event.inputs.notify_on_empty
+            || vars.BT_NOTIFY_ON_EMPTY
+            || 'false' }}
+      ENTRIES_WINDOW_DAYS: >-
+        ${{ github.event.inputs.entries_window_days
+            || vars.BT_ENTRIES_WINDOW_DAYS
+            || '3' }}
+      RUN_MODE: >-
+        ${{ github.event.inputs.mode
+            || (github.event.schedule == '0 21 * * *' && 'evening')
+            || 'morning' }}
+      # The watchlist sheet and its column layout. Required for live runs.
+      SHEET_CSV_URL:      ${{ vars.BT_SHEET_CSV_URL }}
+      HORSE_NAME_COLUMN:  ${{ vars.BT_HORSE_NAME_COLUMN }}
+      RATING_COLUMNS:     ${{ vars.BT_RATING_COLUMNS }}
+      SEASON_START_DATE:  ${{ vars.BT_SEASON_START_DATE }}
+      # Keep this cohort's DB separate from the breeze-up one.
+      DB_PATH: data/barriertrials.sqlite
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e .
+
+      # Persist the SQLite DB (email_log + results_archive + tracked_horses)
+      # across runs so the season-to-date summary accumulates and learned uids
+      # survive. Cache key is unique per run; restore-keys prefix pulls latest.
+      - name: Restore DB cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/barriertrials.sqlite
+            data/barriertrials.sqlite-shm
+            data/barriertrials.sqlite-wal
+          key: barriertrials-db-v1-${{ github.run_id }}
+          restore-keys: |
+            barriertrials-db-v1-
+
+      - name: Run daily job
+        run: |
+          if [ -n "${{ github.event.inputs.backfill_from }}" ]; then
+            python -m barriertrials.daily --backfill-from "${{ github.event.inputs.backfill_from }}"
+          else
+            args="--mode ${RUN_MODE}"
+            if [ -n "${{ github.event.inputs.date }}" ]; then args="$args --date ${{ github.event.inputs.date }}"; fi
+            if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then args="$args --dry-run"; fi
+            if [ "${{ github.event.inputs.demo }}" = "true" ]; then args="$args --demo"; fi
+            python -m barriertrials.daily $args
+          fi
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Barrier-trial tracker"
+            echo ""
+            echo "- date: \`${{ github.event.inputs.date || 'today UK' }}\`"
+            echo "- dry_run: \`${{ github.event.inputs.dry_run || 'false' }}\`"
+            echo "- demo: \`${{ github.event.inputs.demo || 'false' }}\`"
+            echo "- mode: \`${RUN_MODE}\`"
+            echo "- entries_window_days: \`${ENTRIES_WINDOW_DAYS}\`"
+            echo "- notify_on_empty: \`${NOTIFY_ON_EMPTY}\`"
+            if [ -f data/bt_last_preview.txt ]; then
+              echo ""
+              echo "<details><summary>Plain-text preview</summary>"
+              echo ""
+              echo '```'
+              cat data/bt_last_preview.txt
+              echo '```'
+              echo ""
+              echo "</details>"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bt-preview-${{ github.run_id }}
+          path: |
+            data/bt_last_preview.html
+            data/bt_last_preview.txt
+          if-no-files-found: ignore

@@ -33,12 +33,14 @@ dev = [
 
 [project.scripts]
 breezeup-daily = "dailybreezeup.daily:main"
+barriertrials-daily = "barriertrials.daily:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
 dailybreezeup = ["schema.sql", "templates/*.j2"]
+barriertrials = ["schema.sql", "templates/*.j2"]
 
 [tool.ruff]
 line-length = 100

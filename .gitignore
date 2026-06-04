@@ -22,3 +22,8 @@ data/last_preview.txt
 data/breezeup.sqlite
 data/breezeup.sqlite-shm
 data/breezeup.sqlite-wal
+data/bt_last_preview.html
+data/bt_last_preview.txt
+data/barriertrials.sqlite
+data/barriertrials.sqlite-shm
+data/barriertrials.sqlite-wal
