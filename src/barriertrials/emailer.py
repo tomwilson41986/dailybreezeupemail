@@ -85,8 +85,38 @@ def _fmt_card(row: dict[str, Any], *, ran: bool) -> list[str]:
         )
 
     lines.extend(_fmt_fields(row.get("fields")))
+    # Entries email: the horse's results so far this season, under the entry.
+    history = row.get("history") if not ran else None
+    if history:
+        lines.append(f"    Results so far · {len(history)}:")
+        lines.extend(_fmt_runs(history))
     lines.append(f"    {row['race_url']}")
     return lines
+
+
+def _fmt_runs(runs: list[Any]) -> list[str]:
+    """Compact one-line-per-run form list (accepts dicts or HorseRun objects)."""
+    out: list[str] = []
+    for run in runs:
+        rd = _run_attr(run, "race_date")
+        d = rd.strftime("%d %b") if rd else "—"
+        course = _run_attr(run, "course") or ""
+        race_name = _run_attr(run, "race_name") or ""
+        pos = _run_attr(run, "finishing_position") or "—"
+        total = _run_attr(run, "total_runners")
+        pos_label = f"{pos}/{total}" if total else pos
+        sp = _run_attr(run, "sp") or "—"
+        rpr = _run_attr(run, "rpr")
+        rpr_label = f"RPR {rpr}" if rpr is not None else "RPR —"
+        suffix = f" {race_name}" if race_name else ""
+        out.append(f"        {d:>6}  {pos_label:>6}  {course}{suffix}  SP {sp}  {rpr_label}")
+    return out
+
+
+def _run_attr(run: Any, key: str) -> Any:
+    if isinstance(run, dict):
+        return run.get(key)
+    return getattr(run, key, None)
 
 
 def _fmt_pct(x: float) -> str:
@@ -104,17 +134,6 @@ def _fmt_band_table(title: str, rows: list[Any]) -> list[str]:
         out.append(
             f"{flag}{r.label:<8} {r.n_runners:>4} {r.n_winners:>4} "
             f"{_fmt_pct(r.strike_rate):>5} {_fmt_rpr(r.avg_rpr):>7}"
-        )
-    return out
-
-
-def _fmt_top_table(title: str, rows: list[Any]) -> list[str]:
-    out = [title, f"  {'Rating':>6} {'Horse':<26} {'Status':<10} {'pkRPR':>6}"]
-    for r in rows:
-        rating = f"{r.rating:.1f}" if r.rating is not None else "—"
-        out.append(
-            f"  {rating:>6} {(r.horse_name or '')[:26]:<26} "
-            f"{r.status_label:<10} {_fmt_rpr(r.peak_rpr):>6}"
         )
     return out
 
@@ -147,24 +166,30 @@ def _render_text(
         if season_summary:
             parts.append("")
             parts.append(
-                f"═══ SEASON TO DATE · {run_date.year} · "
+                f"═══ HISTORIC RESULTS · since {season_summary.get('season_start', '')} · "
                 f"{season_summary['total_runs']} runs ═══"
             )
             for rating in season_summary["by_rating"]:
                 if rating["bands"]:
                     parts.append("")
                     parts.extend(
-                        _fmt_band_table(f"FORM BY {rating['label'].upper()}", rating["bands"])
-                    )
-                if rating["top"]:
-                    parts.append("")
-                    parts.extend(
-                        _fmt_top_table(
-                            f"TOP 10 BY {rating['label'].upper()}", rating["top"]
+                        _fmt_band_table(
+                            f"PERFORMANCE BY {rating['label'].upper()} BAND", rating["bands"]
                         )
                     )
             parts.append("")
             parts.append(f"  * = small sample (n<{season_summary['low_n_threshold']})")
+            if season_summary.get("horses"):
+                parts.append("")
+                parts.append(f"─── TRACKED HORSES & RESULTS · {len(season_summary['horses'])} ───")
+                for rec in season_summary["horses"]:
+                    parts.append("")
+                    ratings = "  ·  ".join(
+                        f"{label} {value:.1f}" if value is not None else f"{label} —"
+                        for label, value in rec.ratings.items()
+                    )
+                    parts.append(f"{rec.horse_name}  [{ratings}]  {rec.status_label}")
+                    parts.extend(_fmt_runs(rec.runs))
     else:  # morning
         if entered:
             win_plural = "" if entries_window_days == 1 else "S"

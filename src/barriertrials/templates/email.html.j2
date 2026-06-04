@@ -93,30 +93,52 @@
       </thead>
     {%- endmacro -%}
 
-    {%- macro top_table(rows, rating_label) -%}
-      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fff;border:1px solid #e3e3de;border-radius:8px;margin-bottom:12px;">
+    {%- macro runs_table(runs) -%}
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:4px;">
         <thead>
           <tr>
-            <th style="padding:8px;text-align:right;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;width:1%;">#</th>
-            <th style="padding:8px;text-align:right;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">{{ rating_label }}</th>
-            <th style="padding:8px;text-align:left;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Horse</th>
-            <th style="padding:8px;text-align:left;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Status</th>
-            <th style="padding:8px;text-align:right;font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">Peak RPR</th>
+            <th style="padding:4px 8px;text-align:left;font-size:9px;color:#999;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Date</th>
+            <th style="padding:4px 8px;text-align:left;font-size:9px;color:#999;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Course / Race</th>
+            <th style="padding:4px 8px;text-align:left;font-size:9px;color:#999;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Pos</th>
+            <th style="padding:4px 8px;text-align:right;font-size:9px;color:#999;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">SP</th>
+            <th style="padding:4px 8px;text-align:right;font-size:9px;color:#999;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">RPR</th>
           </tr>
         </thead>
         <tbody>
-          {%- for h in rows %}
+          {%- for run in runs %}
           <tr>
-            <td style="padding:8px;font-size:13px;text-align:right;color:#888;border-top:1px solid #efefe9;">{{ loop.index }}</td>
-            <td style="padding:8px;font-size:14px;font-weight:700;text-align:right;border-top:1px solid #efefe9;">{% if h.rating is not none %}{{ "%.1f"|format(h.rating) }}{% else %}&mdash;{% endif %}</td>
-            <td style="padding:8px;font-size:13px;border-top:1px solid #efefe9;">
-              <div style="color:#1a1a1a;font-weight:600;">{{ h.horse_name }}</div>
-            </td>
-            <td style="padding:8px;font-size:13px;border-top:1px solid #efefe9;">{{ status_badge(h.status_kind, h.status_label) }}</td>
-            <td style="padding:8px;font-size:13px;text-align:right;border-top:1px solid #efefe9;font-weight:600;">{% if h.peak_rpr is not none %}{{ h.peak_rpr }}{% else %}&mdash;{% endif %}</td>
+            <td style="padding:5px 8px;font-size:12px;color:#444;border-top:1px solid #efefe9;white-space:nowrap;">{{ run.race_date.strftime("%d %b") if run.race_date else "—" }}</td>
+            <td style="padding:5px 8px;font-size:12px;color:#1a1a1a;border-top:1px solid #efefe9;">{{ run.course }}{% if run.race_name %} <span style="color:#999;">&middot; {{ run.race_name }}</span>{% endif %}</td>
+            <td style="padding:5px 8px;font-size:12px;border-top:1px solid #efefe9;">{{ pos_badge(run.finishing_position, run.total_runners) }}</td>
+            <td style="padding:5px 8px;font-size:12px;color:#444;text-align:right;border-top:1px solid #efefe9;">{{ run.sp or "—" }}</td>
+            <td style="padding:5px 8px;font-size:12px;text-align:right;border-top:1px solid #efefe9;font-weight:600;">{% if run.rpr is not none %}{{ run.rpr }}{% else %}&mdash;{% endif %}</td>
           </tr>
           {%- endfor %}
         </tbody>
+      </table>
+    {%- endmacro -%}
+
+    {%- macro record_card(rec) -%}
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fff;border:1px solid #e3e3de;border-radius:8px;margin-bottom:12px;">
+        <tr>
+          <td style="padding:12px 16px 4px;vertical-align:middle;">
+            <div style="font-size:15px;font-weight:600;color:#1a1a1a;">{{ rec.horse_name }}</div>
+            <div style="font-size:12px;color:#666;margin-top:2px;">
+              {{ status_badge(rec.status_kind, rec.status_label) }}
+              <span style="margin-left:6px;">{{ rec.n_runs }} run{{ '' if rec.n_runs == 1 else 's' }}{% if rec.n_wins %} &middot; {{ rec.n_wins }}W{% endif %}{% if rec.n_places %} &middot; {{ rec.n_places }}P{% endif %}{% if rec.peak_rpr is not none %} &middot; peak RPR {{ rec.peak_rpr }}{% endif %}</span>
+            </div>
+          </td>
+          <td style="padding:12px 16px 4px;vertical-align:top;text-align:right;width:1%;white-space:nowrap;">
+            {%- if rec.ratings %}
+            <table cellpadding="0" cellspacing="0" border="0"><tr>
+              {%- for label, value in rec.ratings.items() %}
+              <td style="{% if not loop.last %}padding-right:8px;{% endif %}">{{ rating_tile(label, value) }}</td>
+              {%- endfor %}
+            </tr></table>
+            {%- endif %}
+          </td>
+        </tr>
+        <tr><td colspan="2" style="padding:0 12px 12px;">{{ runs_table(rec.runs) }}</td></tr>
       </table>
     {%- endmacro -%}
 
@@ -185,6 +207,17 @@
           </td>
         </tr>
         {%- endif %}
+        {#- ─ row 4: results so far this season (entries email only) ─ -#}
+        {%- if not ran and row.history %}
+        <tr>
+          <td colspan="{{ ncols }}" style="padding:0 16px 14px;">
+            <div style="font-size:10px;color:#888;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;border-top:1px solid #efefe9;padding-top:8px;">
+              Results so far &middot; {{ row.history|length }}
+            </div>
+            {{ runs_table(row.history) }}
+          </td>
+        </tr>
+        {%- endif %}
       </table>
     {%- endmacro -%}
 
@@ -204,13 +237,14 @@
 
       {% if season_summary %}
       <h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#666;margin:32px 0 10px;">
-        Season to date &middot; {{ run_date.year }} &middot; {{ season_summary.total_runs }} run{{ '' if season_summary.total_runs == 1 else 's' }}
+        Historic results &middot; since {{ season_summary.season_start }} &middot; {{ season_summary.total_runs }} run{{ '' if season_summary.total_runs == 1 else 's' }}
       </h2>
 
+      {#- Performance per rating band -#}
       {% for rating in season_summary.by_rating %}
       {% if rating.bands %}
       <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fff;border:1px solid #e3e3de;border-radius:8px;margin-bottom:12px;">
-        <tr><td colspan="5" style="padding:10px 12px 4px;font-size:12px;font-weight:700;color:#1a1a1a;letter-spacing:0.04em;">Form by {{ rating.label }}</td></tr>
+        <tr><td colspan="5" style="padding:10px 12px 4px;font-size:12px;font-weight:700;color:#1a1a1a;letter-spacing:0.04em;">Performance by {{ rating.label }} band</td></tr>
         {{ stat_table_header() }}
         <tbody>
           {%- for r in rating.bands %}
@@ -219,17 +253,18 @@
         </tbody>
       </table>
       {% endif %}
-      {% if rating.top %}
-      <h3 style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#666;margin:18px 0 8px;">
-        Top 10 by {{ rating.label }}
-      </h3>
-      {{ top_table(rating.top, rating.label) }}
-      {% endif %}
       {% endfor %}
-
-      <p style="font-size:11px;color:#999;font-style:italic;margin-top:4px;">
+      <p style="font-size:11px;color:#999;font-style:italic;margin:0 0 8px;">
         Italic rows = small sample (n &lt; {{ season_summary.low_n_threshold }}).
       </p>
+
+      {#- Per-horse tracker: every tracked horse that has run, with its results -#}
+      {% if season_summary.horses %}
+      <h3 style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#666;margin:20px 0 8px;">
+        Tracked horses &amp; results &middot; {{ season_summary.horses|length }}
+      </h3>
+      {% for rec in season_summary.horses %}{{ record_card(rec) }}{% endfor %}
+      {% endif %}
       {% endif %}
     {% else %}
       {% if entered %}
