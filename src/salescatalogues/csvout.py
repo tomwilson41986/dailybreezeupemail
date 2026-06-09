@@ -24,6 +24,7 @@ HEADER = [
     "Active",
     "Status",
     "Sale URL",
+    "Sale House Website",
     "Lot No",
     "Horse Name",
     "Sex",
@@ -53,6 +54,7 @@ def _sale_cols(cat: Catalogue) -> list[str]:
         "Yes" if cat.is_active else "No",
         cat.status_label,
         cat.url,
+        cat.house_url,
     ]
 
 

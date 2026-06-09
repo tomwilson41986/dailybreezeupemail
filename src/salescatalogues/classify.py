@@ -174,6 +174,15 @@ def build_catalogue(
     return cat
 
 
+def order_by_date(catalogues: list[Catalogue]) -> list[Catalogue]:
+    """Order the digest by sale date, nearest first. Undated sales (rolling
+    online auctions with no published date) sort to the end."""
+    return sorted(
+        catalogues,
+        key=lambda c: (c.start_date or date.max, c.country, c.name.lower()),
+    )
+
+
 def group_by_country(
     catalogues: list[Catalogue],
 ) -> list[tuple[Country, list[Catalogue]]]:

@@ -65,6 +65,26 @@ SALE_TYPE_ICONS: dict[str, str] = {
 DEFAULT_SALE_TYPE = "Mixed"
 
 
+# Home page for each auction house, shown as the "sales company website" link
+# alongside the direct sale link in the email.
+HOUSE_WEBSITE: dict[str, str] = {
+    "Tattersalls": "https://www.tattersalls.com",
+    "Tattersalls Ireland": "https://www.tattersalls.ie",
+    "Tattersalls Online": "https://www.tattersallsonline.com",
+    "Goffs": "https://www.goffs.com",
+    "Goffs UK": "https://www.goffs.com",
+    "Arqana": "https://www.arqana.com",
+    "BBAG": "https://www.bbag-sales.de",
+    "Keeneland": "https://www.keeneland.com",
+    "Fasig-Tipton": "https://www.fasigtipton.com",
+    "OBS": "https://obssales.com",
+    "Inglis": "https://www.inglis.com.au",
+    "Magic Millions": "https://www.magicmillions.com.au",
+    "NZB": "https://www.nzb.co.nz",
+    "Gavelhouse": "https://gavelhouse.co.nz",
+}
+
+
 def _slug(text: str) -> str:
     """ASCII, lower-case, alnum-only key for stable identity/dedup."""
     norm = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
@@ -143,6 +163,21 @@ class Catalogue:
     @property
     def url(self) -> str:
         return self.raw.url
+
+    @property
+    def house_url(self) -> str:
+        """Home page of the auction house, for the 'sales company' link."""
+        return HOUSE_WEBSITE.get(self.raw.house, "")
+
+    @property
+    def country_flag(self) -> str:
+        c = COUNTRIES.get(self.raw.country)
+        return c.flag if c else "\U0001F30D"  # 🌍 fallback
+
+    @property
+    def country_name(self) -> str:
+        c = COUNTRIES.get(self.raw.country)
+        return c.name if c else self.raw.country
 
     @property
     def online(self) -> bool:

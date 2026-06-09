@@ -51,7 +51,11 @@
       <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fff;border:1px solid #e3e3de;border-radius:8px;margin-bottom:12px;">
         <tr>
           <td style="padding:14px 16px;vertical-align:middle;">
-            <div style="font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">{{ cat.house }}</div>
+            <div style="font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">
+              <span title="{{ cat.country_name }}" style="font-size:14px;vertical-align:-1px;letter-spacing:0;">{{ cat.country_flag }}</span>&nbsp;
+              {%- if cat.house_url %}<a href="{{ cat.house_url }}" style="color:#888;text-decoration:none;">{{ cat.house }}</a>{% else %}{{ cat.house }}{% endif -%}
+              <span style="color:#bbb;">&nbsp;&middot;&nbsp;{{ cat.country_name }}</span>
+            </div>
             <div style="font-size:17px;font-weight:600;color:#1a1a1a;margin-top:3px;">
               <a href="{{ cat.url }}" style="color:#1a5fb4;text-decoration:none;">{{ cat.name }}</a>
             </div>
@@ -66,6 +70,13 @@
               {%- if cat.online %}{{ badge("#e2e6ea", "#3d4750", "ONLINE") }} {% endif -%}
               {%- if not cat.is_active and not cat.is_new and cat.status_label and cat.status_label != "Upcoming" %}{{ badge("#ececec", "#555", cat.status_label) }}{% endif -%}
             </div>
+            <div style="margin-top:9px;font-size:12px;">
+              <a href="{{ cat.url }}" style="color:#1a5fb4;text-decoration:none;font-weight:600;">View sale &amp; catalogue &rsaquo;</a>
+              {%- if cat.house_url %}
+              <span style="color:#ccc;margin:0 8px;">&middot;</span>
+              <a href="{{ cat.house_url }}" style="color:#1a5fb4;text-decoration:none;font-weight:600;">{{ cat.house }} website &rsaquo;</a>
+              {%- endif %}
+            </div>
           </td>
           <td style="padding:14px 16px;vertical-align:middle;text-align:right;width:1%;white-space:nowrap;">
             {{ date_tile(cat) }}
@@ -74,15 +85,13 @@
       </table>
     {%- endmacro -%}
 
-    {#- ───────── Sections ───────── -#}
+    {#- ───────── Chronological list (nearest sale first) ───────── -#}
 
-    {% if sections %}
-      {% for country, rows in sections %}
+    {% if catalogues %}
       <h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#666;margin:24px 0 10px;">
-        <span style="font-size:16px;vertical-align:-1px;">{{ country.flag }}</span>&nbsp; {{ country.name }} &middot; {{ rows|length }}
+        By sale date &middot; nearest first
       </h2>
-      {% for cat in rows %}{{ catalogue_card(cat) }}{% endfor %}
-      {% endfor %}
+      {% for cat in catalogues %}{{ catalogue_card(cat) }}{% endfor %}
     {% else %}
       <div style="background:#fff;border:1px solid #e3e3de;border-radius:8px;padding:20px;">
         <p style="margin:0;color:#444;font-size:15px;font-weight:600;">No New or Active catalogues today</p>
