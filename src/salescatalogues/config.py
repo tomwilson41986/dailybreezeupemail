@@ -30,8 +30,8 @@ class Settings(BaseSettings):
     # Days before a sale's first day that it counts as "Active".
     active_lead_days: int = 2
     # Only sales starting within this many days ahead are listed (keeps the
-    # digest to the live season rather than the whole forward calendar).
-    horizon_days: int = 120
+    # digest to the imminent season rather than the whole forward calendar).
+    horizon_days: int = 30
 
     db_path: Path = Field(default=Path("data/salescatalogues.sqlite"))
 

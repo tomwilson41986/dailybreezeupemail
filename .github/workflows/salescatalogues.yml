@@ -43,7 +43,7 @@ jobs:
             || vars.CATALOGUES_NOTIFY_ON_EMPTY
             || 'false' }}
       ACTIVE_LEAD_DAYS: ${{ vars.CATALOGUES_ACTIVE_LEAD_DAYS || '2' }}
-      HORIZON_DAYS:     ${{ vars.CATALOGUES_HORIZON_DAYS || '120' }}
+      HORIZON_DAYS:     ${{ vars.CATALOGUES_HORIZON_DAYS || '30' }}
 
     steps:
       - uses: actions/checkout@v4
