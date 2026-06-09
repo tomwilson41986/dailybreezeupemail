@@ -27,3 +27,9 @@ data/bt_last_preview.txt
 data/barriertrials.sqlite
 data/barriertrials.sqlite-shm
 data/barriertrials.sqlite-wal
+data/catalogues_preview.html
+data/catalogues_preview.txt
+data/catalogues_preview.csv
+data/salescatalogues.sqlite
+data/salescatalogues.sqlite-shm
+data/salescatalogues.sqlite-wal

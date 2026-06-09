@@ -1,0 +1,898 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+	<meta Http-Equiv="Expires" Content="0">
+
+	<meta http-equiv="X-UA-Compatible" content="IE=Edge"/>
+
+
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0" />
+
+	<meta name="format-detection" content="telephone=no">
+
+
+	<link href="/db/styleNMT.css?v20" type="text/css" rel="stylesheet">
+	<script type="text/javascript" src="/db/js/scripts.js"></script>
+	<script type="text/javascript" src="/db/js/ajax.js"></script>
+	<script type="text/javascript" src="/db/js/ajax-dynamic-list.js?v3"></script>
+
+
+	
+
+<style>
+	.requestIcon {
+		width: 16px;
+		height: 16px;
+		vertical-align: text-bottom;
+		padding-left: 5px;
+	}
+</style>
+<script>
+	var showSMSVerifyOnLoad=false;
+	var showSMSamendPhoneOnLoad=false;
+	var showPurchaseVerifyOnLoad=false;
+
+document.addEventListener('contextmenu', function (event) {
+  if ((event.target.tagName == 'A')||(event.target.parentNode.tagName == 'A')) {
+    event.preventDefault()
+    return false
+  }
+})
+
+</script>
+
+    <link rel="stylesheet" href="/db/v3/main.css">
+    <style>
+	a.button--dark:hover {color:#FFF; text-decoration: none;}
+	.sale-card__heading a:hover {color:inherit; text-decoration: underline;}
+	a.tab:hover {color:#FFF; text-decoration:none;}
+	.sales-list__year-filter {margin-bottom: 3.75rem; max-width: 15rem;}
+        select {height:initial ; background:revert; max-width: 15rem;}
+	.salecalendar {font-weight:700; text-align:center; width:100%;}
+	.salecalendar svg {display:inline; width: 1rem; height: 1rem; position:relative; top: 0.1rem; fill: #C4A979; }
+	.infoIcon {color: #d2b788; text-decoration:none; padding: 4px; font-size: 14px; font-family:SSJunior;}
+	.infoIcon:hover{color: #163659;}
+
+#infobox {
+    left: 50px;
+    top: 50px;
+    position: absolute;
+    display: block;
+    visibility: hidden;
+    text-align: left;
+    z-index: 10000;
+    font-size: 12px;
+    border: 1px solid #163659;
+    background-color: lightyellow;
+    border-color: #163659;
+    box-shadow: 3px 3px 3px #888;
+    -moz-box-shadow: 3px 3px 3px #888;
+    -webkit-box-shadow: 3px 3px 3px #888;
+    -ms-filter: "progid:DXImageTransform.Microsoft.Shadow(color=#CCCCCC,direction=125,strength=5)";
+    filter: progid:DXImageTransform.Microsoft.Shadow(color=#CCCCCC,direction=125,strength=5);
+}
+	#infobox{
+		width: 500px;
+		visibility: hidden; 
+	}
+	#infobox caption {font-size:16px;}
+	@media screen and (max-width: 600px) {
+		#infobox{width: 420px;}
+		#infobox caption {font-size:14px;}
+	}
+	@media screen and (max-width: 500px) {
+		#infobox{width: 320px;}
+	}
+	@media screen and (max-width: 400px) {
+		#infobox{width: 275px;}
+	}
+#infobox {padding:10px; font-size:0.875rem; color:#000; line-height:normal;}
+#infobox h3 {font-family: "Merriweather",sans-serif; font-size:1rem; font-weight:700; margin-bottom: 20px;}
+
+.tooltip__close {
+	display: flex;
+	align-items: center;
+	gap: 0.625rem;
+	font-size: 0.6875rem;
+	font-weight: 700;
+	letter-spacing: .1em;
+	text-transform: uppercase;
+	position: absolute; 
+	top: 15px; 
+	right: 10px;
+	background: none;
+	border: none;
+}
+
+    </style>
+
+
+	<script
+		src="https://code.jquery.com/jquery-3.2.1.min.js"
+		integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+		crossorigin="anonymous"></script>
+	<script src="/Online/assets/js/flickity.pkgd.min.js"></script>
+	<script src="/Online/assets/js/jquery.fitvids.js"></script>
+	<script src="/Online/assets/js/moment.min.js"></script>
+	<script>
+
+		var clockOffset=1780998015-moment().unix();
+		function getCookieValue(c){
+			var str = document.cookie
+			if(str.indexOf(c+"=") >= 0) {
+				str = str.substring((str.indexOf(c+"=") + c.length + 1),str.length)+";"
+				return (unescape(str.substring(0,(str.indexOf(";")))))
+			}
+
+		}
+		function adjustTimes(){
+			var pageDelay=getCookieValue("NOW")-1780998015;
+			if(pageDelay>0){
+				var a=document.querySelectorAll('span[data-sale-timestamp2]')
+				for(var i=0;i<a.length;i++){
+					var o=a[i];
+					var v=Number(o.getAttribute('data-sale-timestamp2'));
+					v-=pageDelay;
+					o.setAttribute('data-sale-timestamp2',v);
+				}
+			}
+		}
+		
+		function screenWidthDetect(){
+			var vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+			var ss=(vw<600)?"yes":"no";
+			document.cookie="SmallScreen="+ss+";expires=;path=/; SameSite=None; Secure";
+		}
+
+		window.addEventListener('load', (event) => {
+			window.setTimeout(function(){screenWidthDetect()},300)
+		});
+
+
+	</script>
+	<script src="/Online/assets/js/functions.js?v14"></script>
+
+<script>
+	function goToYear(y){
+		window.location="/4DCGI/Sale/SaleDates?site=NMT&display=results&year="+y;
+	}
+
+function showInfo(t){
+	var y=event.clientY;
+	var t='<div style="padding:10px">'+t+'</div>';
+	window.setTimeout(function(){ajax_showInfobox(t,y);},1)
+	return false;
+}
+function ajax_showInfobox(ar,y) {
+
+	ar +='<button type="button" class="tooltip__close tooltip__toggle">Close<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" width="25"><path d="m13.9 12 5.3-5.3c.4-.4.4-1 0-1.4s-1-.4-1.4 0l-5.3 5.3-5.3-5.3c-.4-.4-1-.4-1.4 0s-.4 1 0 1.4l5.3 5.3-5.3 5.3c-.4.4-.4 1 0 1.4.2.2.4.3.7.3s.5-.1.7-.3l5.3-5.3 5.3 5.3c.2.2.5.3.7.3s.5-.1.7-.3c.4-.4.4-1 0-1.4L13.9 12z"></path></svg></button>'
+
+	o=document.getElementById("infobox")
+	o.innerHTML=ar;
+	var ymax=document.body.clientHeight-o.offsetHeight;
+	if(ymax<0){document.body.style.minHeight=(o.offsetHeight+20)+"px"};
+	if(y>ymax){y=ymax};
+	if(y<0){y=0};
+	o.style.top=(y+"px");
+	o.style.left=(((document.body.scrollWidth-o.offsetWidth)/2)+"px");
+	o.style.visibility='visible';
+}
+
+function hideInfobox() {
+	document.getElementById("infobox").style.visibility='hidden';
+}
+
+</script>
+<style>
+	a {text-decoration:none;}
+	
+		a:hover {text-decoration:underline;}
+	
+	.card__sales {padding: 8px 1px;}
+	.page-body {padding: 0px;}
+	html {background: #FFFFFF}
+	.sale-online {color:#cd2c4e;}
+	.countdownLabel {margin-right:4px;}
+	.countdown{font-size:16px; font-weight:700; background-color: #cd2c4e; color: #FFF; padding:9px;}
+	.countdownExpired {}
+	.page-wrap {min-width: initial;}
+
+</style>
+
+</head>
+
+
+
+<body class="site-newmarket" data-iframe-size onclick="hideInfobox();" ontouchstart="hideInfobox();">
+<div id="infobox"></div>
+
+
+<section class="sales-list">
+    <div class="container container--container-padding">
+        <div class="sales-list__header column-container column-container--align-center column-container--justify-space-between">
+            <div class="column">
+                <h1 class="heading-4 heading-2--1024">
+                    Sales & Results
+                </h1>
+            </div>
+
+            <div class="sales-list__type column">
+                <a href="/4DCGI/Sale/SaleDates?site=NMT&display=upcoming" class="tab">
+                    All Upcoming Sales
+                </a>
+
+                <a href="/4DCGI/Sale/SaleDates?site=NMT&display=entries" class="tab tab--outline">
+                   Entries Open
+                </a>
+
+                <a href="/4DCGI/Sale/SaleDates?site=NMT&display=catalogues" class="tab  tab--outline">
+                    Catalogues Available
+                </a>
+
+                <a href="/4DCGI/Sale/SaleDates?site=NMT&display=results" class="tab  tab--outline">
+                    Results
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="sales-list__type-scroller scroll-x">
+        <div class="scroll-x__inner">
+            <div class="sales-list__type-scroller-content scroll-x__content container--left container--right">
+                <a href="/4DCGI/Sale/SaleDates?site=NMT&display=upcoming" class="tab">
+                    All
+                </a>
+
+                <a href="/4DCGI/Sale/SaleDates?site=NMT&display=entries" class="tab tab--outline">
+                    Entries
+                </a>
+
+               <a href="/4DCGI/Sale/SaleDates?site=NMT&display=catalogues" class="tab  tab--outline">
+                    Catalogues
+                </a>
+
+                <a href="/4DCGI/Sale/SaleDates?site=NMT&display=results" class="tab  tab--outline">
+                    Results
+                </a>
+            </div>
+        </div>
+    </div>
+
+
+
+
+    
+    <div class="container container--container-padding">
+        <div class="sales-list__list column-container">
+
+
+
+
+<div class="salecalendar">
+To add these dates to your calendar, <a href="https://www.tattersalls.com/SaleCalendar.ics"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" width="25">
+    <path d="M19.5 3.5h-2v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-6v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-2c-1.7 0-3 1.3-3 3v14c0 1.7 1.3 3 3 3h14c1.7 0 3-1.3 3-3v-14c0-1.7-1.3-3-3-3zm-14 2h2v1c0 .6.4 1 1 1s1-.4 1-1v-1h6v1c0 .6.4 1 1 1s1-.4 1-1v-1h2c.6 0 1 .4 1 1v3h-16v-3c0-.6.4-1 1-1zm14 16h-14c-.6 0-1-.4-1-1v-9h16v9c0 .6-.4 1-1 1z"></path>
+</svg> DOWNLOAD</a> then double-click that file.<span class="infonote"><a href="#" onclick="return showInfo('<h3>Adding Sales To Your Calendar</h3><p>Double-clicking that downloaded file should open it in your default calendar software.  Else use your calendar program’s Import or Add Calendar feature to import that file.</p><p>Or subscribe, to keep up to date with changes, by right-clicking on DOWNLOAD to copy that link, then pasting in your calendar program’s Calendar Subscription feature.</p>');" class="infoIcon">&#x2139;</a></span>
+</div>
+
+
+
+
+
+
+
+
+
+
+<div class="sale-card sale-card--status-catalogue-available column">
+    <article class="sale-card__inner">
+        <div class="sale-card__status">
+            Catalogue Available
+
+
+
+
+
+
+
+        </div>
+
+        <div class="sale-card__details">
+            <div class="sale-card__heading heading-5 heading-4--1200">
+                
+			<a href="https://www.tattersalls.com/sales/july-sale/4DCGI/Sale/JUL26/Main" target="_top">July Sale</a>
+		
+            </div>
+
+            <div class="sale-card__meta">
+                <div class="sale-card__meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" width="25">
+    <path d="M19.5 3.5h-2v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-6v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-2c-1.7 0-3 1.3-3 3v14c0 1.7 1.3 3 3 3h14c1.7 0 3-1.3 3-3v-14c0-1.7-1.3-3-3-3zm-14 2h2v1c0 .6.4 1 1 1s1-.4 1-1v-1h6v1c0 .6.4 1 1 1s1-.4 1-1v-1h2c.6 0 1 .4 1 1v3h-16v-3c0-.6.4-1 1-1zm14 16h-14c-.6 0-1-.4-1-1v-9h16v9c0 .6-.4 1-1 1z"/>
+</svg>
+
+                    <div class="sale-card__meta-item-text">
+                        7 &ndash; 9 Jul 2026
+                    </div>
+                </div>
+
+
+                <div class="sale-card__meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" width="25">
+	<path d="M12.5 23.5c-6.1 0-11-4.9-11-11s4.9-11 11-11 11 4.9 11 11-4.9 11-11 11zm0-20c-5 0-9 4-9 9s4 9 9 9 9-4 9-9c0-4.9-4-9-9-9z"/>
+	<path d="M16.5 15.5c-.2 0-.3 0-.4-.1l-4-2c-.3-.2-.6-.5-.6-.9v-6c0-.6.4-1 1-1s1 .4 1 1v5.4l3.4 1.7c.5.2.7.8.4 1.3-.1.4-.4.6-.8.6z"/>
+</svg>
+
+                    <div class="sale-card__meta-item-text">
+                        <div>Tue: 10.00am, </div><div>Wed: 10.00am, </div><div>Thu: 10.00am, </div><div>Thu: 5.45pm</div>
+                    </div>
+                </div>
+
+
+
+
+            </div>
+        </div>
+
+        <div class="sale-card__actions">
+
+            <a class="button button--dark iframe-parent-link" href="https://www.tattersalls.com/sales/july-sale/4DCGI/Sale/JUL26/Main/Overview" target="_top">
+               Overview
+            </a>
+
+
+            <a class="button button--dark iframe-parent-link" href="https://www.tattersalls.com/sales/july-sale/4DCGI/Sale/JUL26/Main" target="_top">
+               View Lots
+            </a>
+
+        </div>
+    </article>
+</div>
+
+
+
+
+
+<div class="sale-card sale-card--status-entries-open column">
+    <article class="sale-card__inner">
+        <div class="sale-card__status">
+            Entries Open
+
+
+
+
+
+
+
+
+
+
+        </div>
+
+        <div class="sale-card__details">
+            <div class="sale-card__heading heading-5 heading-4--1200">
+                
+			<a href="https://www.tattersalls.com/sales/somerville-yearling-sale/4DCGI/Sale/SOM26/Main/Overview" target="_top">Somerville Yearling Sale</a>
+		
+            </div>
+
+            <div class="sale-card__meta">
+                <div class="sale-card__meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" width="25">
+    <path d="M19.5 3.5h-2v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-6v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-2c-1.7 0-3 1.3-3 3v14c0 1.7 1.3 3 3 3h14c1.7 0 3-1.3 3-3v-14c0-1.7-1.3-3-3-3zm-14 2h2v1c0 .6.4 1 1 1s1-.4 1-1v-1h6v1c0 .6.4 1 1 1s1-.4 1-1v-1h2c.6 0 1 .4 1 1v3h-16v-3c0-.6.4-1 1-1zm14 16h-14c-.6 0-1-.4-1-1v-9h16v9c0 .6-.4 1-1 1z"/>
+</svg>
+
+                    <div class="sale-card__meta-item-text">
+                        2 Sep 2026
+                    </div>
+                </div>
+
+
+
+
+
+            </div>
+        </div>
+
+        <div class="sale-card__actions">
+
+            <a class="button button--dark iframe-parent-link" href="https://secure.tattersalls.com/4DCGI/MyAccount?Goto=EnterYearlingSales2026" target="_blank">
+               Enter
+            </a>
+
+
+            <a class="button button--dark iframe-parent-link" href="https://www.tattersalls.com/sales/somerville-yearling-sale/4DCGI/Sale/SOM26/Main/Overview" target="_top">
+               Overview
+            </a>
+
+        </div>
+    </article>
+</div>
+
+
+
+
+
+<div class="sale-card sale-card--status-entries-open column">
+    <article class="sale-card__inner">
+        <div class="sale-card__status">
+            Entries Open
+
+
+
+
+
+
+
+
+
+
+        </div>
+
+        <div class="sale-card__details">
+            <div class="sale-card__heading heading-5 heading-4--1200">
+                
+			<a href="https://www.tattersalls.com/sales/october-yearling-sale-book-1/4DCGI/Sale/OC126/Main/Overview" target="_top">October Yearling Sale Book 1</a>
+		
+            </div>
+
+            <div class="sale-card__meta">
+                <div class="sale-card__meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" width="25">
+    <path d="M19.5 3.5h-2v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-6v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-2c-1.7 0-3 1.3-3 3v14c0 1.7 1.3 3 3 3h14c1.7 0 3-1.3 3-3v-14c0-1.7-1.3-3-3-3zm-14 2h2v1c0 .6.4 1 1 1s1-.4 1-1v-1h6v1c0 .6.4 1 1 1s1-.4 1-1v-1h2c.6 0 1 .4 1 1v3h-16v-3c0-.6.4-1 1-1zm14 16h-14c-.6 0-1-.4-1-1v-9h16v9c0 .6-.4 1-1 1z"/>
+</svg>
+
+                    <div class="sale-card__meta-item-text">
+                        6 &ndash; 8 Oct 2026
+                    </div>
+                </div>
+
+
+
+
+
+            </div>
+        </div>
+
+        <div class="sale-card__actions">
+
+            <a class="button button--dark iframe-parent-link" href="https://secure.tattersalls.com/4DCGI/MyAccount?Goto=EnterYearlingSales2026" target="_blank">
+               Enter
+            </a>
+
+
+            <a class="button button--dark iframe-parent-link" href="https://www.tattersalls.com/sales/october-yearling-sale-book-1/4DCGI/Sale/OC126/Main/Overview" target="_top">
+               Overview
+            </a>
+
+        </div>
+    </article>
+</div>
+
+
+
+
+
+<div class="sale-card sale-card--status-entries-open column">
+    <article class="sale-card__inner">
+        <div class="sale-card__status">
+            Entries Open
+
+
+
+
+
+
+
+
+
+
+        </div>
+
+        <div class="sale-card__details">
+            <div class="sale-card__heading heading-5 heading-4--1200">
+                
+			<a href="https://www.tattersalls.com/sales/october-yearling-sale-book-2/4DCGI/Sale/OC226/Main/Overview" target="_top">October Yearling Sale Book 2</a>
+		
+            </div>
+
+            <div class="sale-card__meta">
+                <div class="sale-card__meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" width="25">
+    <path d="M19.5 3.5h-2v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-6v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-2c-1.7 0-3 1.3-3 3v14c0 1.7 1.3 3 3 3h14c1.7 0 3-1.3 3-3v-14c0-1.7-1.3-3-3-3zm-14 2h2v1c0 .6.4 1 1 1s1-.4 1-1v-1h6v1c0 .6.4 1 1 1s1-.4 1-1v-1h2c.6 0 1 .4 1 1v3h-16v-3c0-.6.4-1 1-1zm14 16h-14c-.6 0-1-.4-1-1v-9h16v9c0 .6-.4 1-1 1z"/>
+</svg>
+
+                    <div class="sale-card__meta-item-text">
+                        12 &ndash; 14 Oct 2026
+                    </div>
+                </div>
+
+
+
+
+
+            </div>
+        </div>
+
+        <div class="sale-card__actions">
+
+            <a class="button button--dark iframe-parent-link" href="https://secure.tattersalls.com/4DCGI/MyAccount?Goto=EnterYearlingSales2026" target="_blank">
+               Enter
+            </a>
+
+
+            <a class="button button--dark iframe-parent-link" href="https://www.tattersalls.com/sales/october-yearling-sale-book-2/4DCGI/Sale/OC226/Main/Overview" target="_top">
+               Overview
+            </a>
+
+        </div>
+    </article>
+</div>
+
+
+
+
+
+<div class="sale-card sale-card--status-entries-open column">
+    <article class="sale-card__inner">
+        <div class="sale-card__status">
+            Entries Open
+
+
+
+
+
+
+
+
+
+
+        </div>
+
+        <div class="sale-card__details">
+            <div class="sale-card__heading heading-5 heading-4--1200">
+                
+			<a href="https://www.tattersalls.com/sales/october-yearling-sale-book-3/4DCGI/Sale/OC326/Main/Overview" target="_top">October Yearling Sale Book 3</a>
+		
+            </div>
+
+            <div class="sale-card__meta">
+                <div class="sale-card__meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" width="25">
+    <path d="M19.5 3.5h-2v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-6v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-2c-1.7 0-3 1.3-3 3v14c0 1.7 1.3 3 3 3h14c1.7 0 3-1.3 3-3v-14c0-1.7-1.3-3-3-3zm-14 2h2v1c0 .6.4 1 1 1s1-.4 1-1v-1h6v1c0 .6.4 1 1 1s1-.4 1-1v-1h2c.6 0 1 .4 1 1v3h-16v-3c0-.6.4-1 1-1zm14 16h-14c-.6 0-1-.4-1-1v-9h16v9c0 .6-.4 1-1 1z"/>
+</svg>
+
+                    <div class="sale-card__meta-item-text">
+                        15 &ndash; 16 Oct 2026
+                    </div>
+                </div>
+
+
+
+
+
+            </div>
+        </div>
+
+        <div class="sale-card__actions">
+
+            <a class="button button--dark iframe-parent-link" href="https://secure.tattersalls.com/4DCGI/MyAccount?Goto=EnterYearlingSales2026" target="_blank">
+               Enter
+            </a>
+
+
+            <a class="button button--dark iframe-parent-link" href="https://www.tattersalls.com/sales/october-yearling-sale-book-3/4DCGI/Sale/OC326/Main/Overview" target="_top">
+               Overview
+            </a>
+
+        </div>
+    </article>
+</div>
+
+
+<div class="sale-card sale-card--status-entries-closed column">
+    <article class="sale-card__inner">
+        <div>
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+        </div>
+
+        <div class="sale-card__details">
+            <div class="sale-card__heading heading-5 heading-4--1200">
+                
+			<a href="https://www.tattersalls.com/sales/autumn-horses-in-training-sale/4DCGI/Sale/AUT26/Main/Overview" target="_top">Autumn Horses in Training Sale</a>
+		
+            </div>
+
+            <div class="sale-card__meta">
+                <div class="sale-card__meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" width="25">
+    <path d="M19.5 3.5h-2v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-6v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-2c-1.7 0-3 1.3-3 3v14c0 1.7 1.3 3 3 3h14c1.7 0 3-1.3 3-3v-14c0-1.7-1.3-3-3-3zm-14 2h2v1c0 .6.4 1 1 1s1-.4 1-1v-1h6v1c0 .6.4 1 1 1s1-.4 1-1v-1h2c.6 0 1 .4 1 1v3h-16v-3c0-.6.4-1 1-1zm14 16h-14c-.6 0-1-.4-1-1v-9h16v9c0 .6-.4 1-1 1z"/>
+</svg>
+
+                    <div class="sale-card__meta-item-text">
+                        26 &ndash; 30 Oct 2026
+                    </div>
+                </div>
+
+
+
+
+
+            </div>
+        </div>
+
+        <div class="sale-card__actions">
+
+            <a class="button button--dark iframe-parent-link" href="https://www.tattersalls.com/sales/autumn-horses-in-training-sale/4DCGI/Sale/AUT26/Main/Overview" target="_top">
+               Overview
+            </a>
+
+
+        </div>
+    </article>
+</div>
+
+
+
+
+
+<div class="sale-card sale-card--status-entries-open column">
+    <article class="sale-card__inner">
+        <div class="sale-card__status">
+            Entries Open
+
+
+
+
+
+
+
+
+
+
+        </div>
+
+        <div class="sale-card__details">
+            <div class="sale-card__heading heading-5 heading-4--1200">
+                
+			<a href="https://www.tattersalls.com/sales/autumn-yearling-sale/4DCGI/Sale/AUY26/Main/Overview" target="_top">Autumn Yearling Sale</a>
+		
+            </div>
+
+            <div class="sale-card__meta">
+                <div class="sale-card__meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" width="25">
+    <path d="M19.5 3.5h-2v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-6v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-2c-1.7 0-3 1.3-3 3v14c0 1.7 1.3 3 3 3h14c1.7 0 3-1.3 3-3v-14c0-1.7-1.3-3-3-3zm-14 2h2v1c0 .6.4 1 1 1s1-.4 1-1v-1h6v1c0 .6.4 1 1 1s1-.4 1-1v-1h2c.6 0 1 .4 1 1v3h-16v-3c0-.6.4-1 1-1zm14 16h-14c-.6 0-1-.4-1-1v-9h16v9c0 .6-.4 1-1 1z"/>
+</svg>
+
+                    <div class="sale-card__meta-item-text">
+                        30 Oct 2026
+                    </div>
+                </div>
+
+
+
+
+
+            </div>
+        </div>
+
+        <div class="sale-card__actions">
+
+            <a class="button button--dark iframe-parent-link" href="https://secure.tattersalls.com/4DCGI/MyAccount?Goto=EnterYearlingSales2026" target="_blank">
+               Enter
+            </a>
+
+
+            <a class="button button--dark iframe-parent-link" href="https://www.tattersalls.com/sales/autumn-yearling-sale/4DCGI/Sale/AUY26/Main/Overview" target="_top">
+               Overview
+            </a>
+
+        </div>
+    </article>
+</div>
+
+
+<div class="sale-card sale-card--status-entries-closed column">
+    <article class="sale-card__inner">
+        <div>
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+        </div>
+
+        <div class="sale-card__details">
+            <div class="sale-card__heading heading-5 heading-4--1200">
+                
+			<a href="https://www.tattersalls.com/sales/december-yearling-sale/4DCGI/Sale/DEY26/Main/Overview" target="_top">December Yearling Sale</a>
+		
+            </div>
+
+            <div class="sale-card__meta">
+                <div class="sale-card__meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" width="25">
+    <path d="M19.5 3.5h-2v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-6v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-2c-1.7 0-3 1.3-3 3v14c0 1.7 1.3 3 3 3h14c1.7 0 3-1.3 3-3v-14c0-1.7-1.3-3-3-3zm-14 2h2v1c0 .6.4 1 1 1s1-.4 1-1v-1h6v1c0 .6.4 1 1 1s1-.4 1-1v-1h2c.6 0 1 .4 1 1v3h-16v-3c0-.6.4-1 1-1zm14 16h-14c-.6 0-1-.4-1-1v-9h16v9c0 .6-.4 1-1 1z"/>
+</svg>
+
+                    <div class="sale-card__meta-item-text">
+                        23 Nov 2026
+                    </div>
+                </div>
+
+
+
+
+
+            </div>
+        </div>
+
+        <div class="sale-card__actions">
+
+            <a class="button button--dark iframe-parent-link" href="https://www.tattersalls.com/sales/december-yearling-sale/4DCGI/Sale/DEY26/Main/Overview" target="_top">
+               Overview
+            </a>
+
+
+        </div>
+    </article>
+</div>
+
+
+
+
+
+<div class="sale-card sale-card--status-entries-open column">
+    <article class="sale-card__inner">
+        <div class="sale-card__status">
+            Entries Open
+
+
+
+
+
+
+
+
+
+
+        </div>
+
+        <div class="sale-card__details">
+            <div class="sale-card__heading heading-5 heading-4--1200">
+                
+			<a href="https://www.tattersalls.com/sales/december-foal-sale/4DCGI/Sale/DEF26/Main/Overview" target="_top">December Foal Sale</a>
+		
+            </div>
+
+            <div class="sale-card__meta">
+                <div class="sale-card__meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" width="25">
+    <path d="M19.5 3.5h-2v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-6v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-2c-1.7 0-3 1.3-3 3v14c0 1.7 1.3 3 3 3h14c1.7 0 3-1.3 3-3v-14c0-1.7-1.3-3-3-3zm-14 2h2v1c0 .6.4 1 1 1s1-.4 1-1v-1h6v1c0 .6.4 1 1 1s1-.4 1-1v-1h2c.6 0 1 .4 1 1v3h-16v-3c0-.6.4-1 1-1zm14 16h-14c-.6 0-1-.4-1-1v-9h16v9c0 .6-.4 1-1 1z"/>
+</svg>
+
+                    <div class="sale-card__meta-item-text">
+                        24 &ndash; 28 Nov 2026
+                    </div>
+                </div>
+
+
+
+
+
+            </div>
+        </div>
+
+        <div class="sale-card__actions">
+
+            <a class="button button--dark iframe-parent-link" href="https://secure.tattersalls.com/4DCGI/MyAccount?Goto=EnterDecemberFoalSale2026" target="_blank">
+               Enter
+            </a>
+
+
+            <a class="button button--dark iframe-parent-link" href="https://www.tattersalls.com/sales/december-foal-sale/4DCGI/Sale/DEF26/Main/Overview" target="_top">
+               Overview
+            </a>
+
+        </div>
+    </article>
+</div>
+
+
+
+
+
+<div class="sale-card sale-card--status-entries-open column">
+    <article class="sale-card__inner">
+        <div class="sale-card__status">
+            Entries Open
+
+
+
+
+
+
+
+
+
+
+        </div>
+
+        <div class="sale-card__details">
+            <div class="sale-card__heading heading-5 heading-4--1200">
+                
+			<a href="https://www.tattersalls.com/sales/december-mare-sale/4DCGI/Sale/DEM26/Main/Overview" target="_top">December Mares Sale</a>
+		
+            </div>
+
+            <div class="sale-card__meta">
+                <div class="sale-card__meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 25 25" width="25">
+    <path d="M19.5 3.5h-2v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-6v-1c0-.6-.4-1-1-1s-1 .4-1 1v1h-2c-1.7 0-3 1.3-3 3v14c0 1.7 1.3 3 3 3h14c1.7 0 3-1.3 3-3v-14c0-1.7-1.3-3-3-3zm-14 2h2v1c0 .6.4 1 1 1s1-.4 1-1v-1h6v1c0 .6.4 1 1 1s1-.4 1-1v-1h2c.6 0 1 .4 1 1v3h-16v-3c0-.6.4-1 1-1zm14 16h-14c-.6 0-1-.4-1-1v-9h16v9c0 .6-.4 1-1 1z"/>
+</svg>
+
+                    <div class="sale-card__meta-item-text">
+                        30 Nov &ndash; 3 Dec 2026
+                    </div>
+                </div>
+
+
+
+
+
+            </div>
+        </div>
+
+        <div class="sale-card__actions">
+
+            <a class="button button--dark iframe-parent-link" href="https://secure.tattersalls.com/4DCGI/MyAccount?Goto=EnterDecemberMareSale2026" target="_blank">
+               Enter
+            </a>
+
+
+            <a class="button button--dark iframe-parent-link" href="https://www.tattersalls.com/sales/december-mare-sale/4DCGI/Sale/DEM26/Main/Overview" target="_top">
+               Overview
+            </a>
+
+        </div>
+    </article>
+</div>
+
+
+
+
+
+        </div>
+    </div>
+</section>
+
+
+    <script src="/db/v3/iframe-resizer.parent.js" type="text/javascript" async></script>
+    <script src="/db/v3/iframe-resizer.child.js" type="text/javascript" async></script>
+    <script src="/db/v3/main.js" type="text/javascript" async></script>
+</body>
+</html>
+
