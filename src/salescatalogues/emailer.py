@@ -13,10 +13,10 @@ from typing import Any
 
 from jinja2 import Environment, PackageLoader, select_autoescape
 
-from salescatalogues.classify import group_by_country
+from salescatalogues.classify import order_by_date
 from salescatalogues.config import Settings
 from salescatalogues.csvout import to_csv
-from salescatalogues.models import Catalogue, Country, Lot
+from salescatalogues.models import Catalogue, Lot
 
 log = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ def _env() -> Environment:
 
 def _render_text(
     run_date: date,
-    sections: list[tuple[Country, list[Catalogue]]],
+    catalogues: list[Catalogue],
     *,
     active_count: int,
     new_count: int,
@@ -54,23 +54,23 @@ def _render_text(
         f"{active_count} Active · {new_count} New · {total} catalogues",
         "",
     ]
-    if not sections:
+    if not catalogues:
         lines.append("No New or Active thoroughbred sales catalogues today.")
         return "\n".join(lines) + "\n"
-    for country, rows in sections:
-        lines.append(f"=== {country.name} ({len(rows)}) ===")
-        for r in rows:
-            flags = []
-            if r.is_active:
-                flags.append("ACTIVE")
-            if r.is_new:
-                flags.append("NEW")
-            if r.online:
-                flags.append("ONLINE")
-            flag_str = f"  [{' · '.join(flags)}]" if flags else ""
-            lines.append(f"  {r.house}: {r.name}{flag_str}")
-            lines.append(f"     {r.sale_type} · {r.date_label()}")
-            lines.append(f"     {r.url}")
+    for r in catalogues:
+        flags = []
+        if r.is_active:
+            flags.append("ACTIVE")
+        if r.is_new:
+            flags.append("NEW")
+        if r.online:
+            flags.append("ONLINE")
+        flag_str = f"  [{' · '.join(flags)}]" if flags else ""
+        lines.append(f"  {r.date_label()} · {r.country_name} · {r.house}{flag_str}")
+        lines.append(f"     {r.name} ({r.sale_type})")
+        lines.append(f"     Sale & catalogue: {r.url}")
+        if r.house_url:
+            lines.append(f"     {r.house} website: {r.house_url}")
         lines.append("")
     lines.append(f"Full list attached: sales_catalogues_{run_date.isoformat()}.csv")
     return "\n".join(lines) + "\n"
@@ -84,7 +84,7 @@ def render(
     diagnostics: dict[str, Any] | None = None,
 ) -> EmailPayload:
     diagnostics = diagnostics or {}
-    sections = group_by_country(catalogues)
+    ordered = order_by_date(catalogues)
     active_count = sum(1 for c in catalogues if c.is_active)
     new_count = sum(1 for c in catalogues if c.is_new)
     total = len(catalogues)
@@ -97,21 +97,21 @@ def render(
     html = env.get_template("email.html.j2").render(
         subject=subject,
         run_date=run_date,
-        sections=sections,
+        catalogues=ordered,
         active_count=active_count,
         new_count=new_count,
         total=total,
         diagnostics=diagnostics,
     )
     text = _render_text(
-        run_date, sections,
+        run_date, ordered,
         active_count=active_count, new_count=new_count, total=total,
     )
     return EmailPayload(
         subject=subject,
         html=html,
         text=text,
-        csv_text=to_csv(catalogues, lots_by_id),
+        csv_text=to_csv(ordered, lots_by_id),
         csv_filename=f"sales_catalogues_{run_date.isoformat()}.csv",
     )
 
