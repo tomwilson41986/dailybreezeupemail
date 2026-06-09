@@ -1,67 +1,104 @@
-{#- Daily Sales Catalogues digest. Email-safe inline styles only. -#}
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{ subject }}</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ subject }}</title>
 </head>
-<body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a;">
-<div style="max-width:680px;margin:0 auto;padding:20px 14px;">
-
-  <div style="background:#0b2545;border-radius:10px;padding:20px 22px;color:#ffffff;">
-    <div style="font-size:13px;letter-spacing:1px;text-transform:uppercase;opacity:.8;">Daily Sales Catalogues</div>
-    <div style="font-size:22px;font-weight:700;margin-top:4px;">Thoroughbred Sales Worldwide</div>
-    <div style="font-size:14px;margin-top:6px;opacity:.85;">{{ run_date.strftime('%A %-d %B %Y') }}</div>
-    <div style="margin-top:14px;font-size:13px;">
-      <span style="display:inline-block;background:#e63946;color:#fff;border-radius:14px;padding:3px 11px;margin-right:6px;font-weight:600;">&#9679; {{ active_count }} Active</span>
-      <span style="display:inline-block;background:#2a9d8f;color:#fff;border-radius:14px;padding:3px 11px;margin-right:6px;font-weight:600;">&#10024; {{ new_count }} New</span>
-      <span style="display:inline-block;background:#ffffff22;color:#fff;border-radius:14px;padding:3px 11px;font-weight:600;">{{ total }} catalogues</span>
+<body style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#f4f4f1;margin:0;padding:24px;">
+  <div style="max-width:920px;margin:0 auto;">
+    <div style="margin-bottom:20px;">
+      <h1 style="margin:0;font-size:22px;font-weight:600;letter-spacing:-0.01em;">Sales catalogues</h1>
+      <p style="margin:4px 0 0;color:#666;font-size:13px;">
+        {{ run_date.strftime("%A %d %B %Y") }} &middot; {{ total }} catalogue{{ '' if total == 1 else 's' }}
+        {%- if active_count %} &middot; {{ active_count }} active{% endif -%}
+        {%- if new_count %} &middot; {{ new_count }} new{% endif -%}
+      </p>
     </div>
-  </div>
 
-  {% if sections %}
-    {% for country, rows in sections %}
-    <div style="margin-top:24px;">
-      <div style="font-size:18px;font-weight:700;border-bottom:2px solid #0b2545;padding-bottom:6px;">
-        <span style="font-size:22px;">{{ country.flag }}</span>&nbsp;{{ country.name }}
-        <span style="font-size:13px;font-weight:500;color:#6b7280;">&nbsp;&middot;&nbsp;{{ rows|length }}</span>
-      </div>
+    {#- ───────── Macros ───────── -#}
 
-      {% for r in rows %}
-      <div style="background:#ffffff;border:1px solid #e5e7eb;{% if r.is_active %}border-left:4px solid #e63946;{% elif r.is_new %}border-left:4px solid #2a9d8f;{% else %}border-left:4px solid #cbd5e1;{% endif %}border-radius:8px;padding:12px 14px;margin-top:10px;">
-        <div style="font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.4px;">{{ r.house }}</div>
-        <div style="font-size:16px;font-weight:700;margin-top:2px;">
-          <a href="{{ r.url }}" style="color:#0b2545;text-decoration:none;">{{ r.name }}</a>
-        </div>
-        <div style="font-size:13px;color:#374151;margin-top:5px;">
-          <span style="margin-right:10px;">{{ r.type_icon }} {{ r.sale_type }}</span>
-          <span style="margin-right:10px;">&#128197; {{ r.date_label() }}</span>
-        </div>
-        <div style="margin-top:8px;">
-          {% if r.is_active %}<span style="display:inline-block;background:#e63946;color:#fff;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;margin-right:5px;">&#9679; ACTIVE</span>{% endif %}
-          {% if r.is_new %}<span style="display:inline-block;background:#2a9d8f;color:#fff;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;margin-right:5px;">&#10024; NEW</span>{% endif %}
-          {% if r.online %}<span style="display:inline-block;background:#3a86ff;color:#fff;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;margin-right:5px;">&#128187; ONLINE</span>{% endif %}
-          {% if not r.is_active and not r.is_new and r.status_label %}<span style="display:inline-block;background:#eef2f7;color:#475569;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:600;">{{ r.status_label }}</span>{% endif %}
-        </div>
-      </div>
+    {%- macro badge(bg, fg, label) -%}
+      <span style="display:inline-block;background:{{ bg }};color:{{ fg }};font-weight:700;font-size:11px;letter-spacing:0.04em;padding:2px 8px;border-radius:10px;">{{ label }}</span>
+    {%- endmacro -%}
+
+    {#- Date tile mirrors the rating tile on the breeze-up / barrier-trial cards:
+        a rounded swatch with a small label over a big value. Colour tracks
+        state — green = active, amber = new, neutral otherwise. -#}
+    {%- macro date_tile(cat) -%}
+      {%- if cat.is_active -%}
+        {%- set bg, fg, label_fg = "#cce5cc", "#1f4a1f", "#3c6c3c" -%}
+      {%- elif cat.is_new -%}
+        {%- set bg, fg, label_fg = "#f5efde", "#6a5a30", "#8a7a4f" -%}
+      {%- else -%}
+        {%- set bg, fg, label_fg = "#f0f0ec", "#555", "#888" -%}
+      {%- endif -%}
+      <table cellpadding="0" cellspacing="0" border="0" style="background:{{ bg }};border-radius:8px;">
+        <tr>
+          <td style="padding:10px 14px;text-align:center;line-height:1;min-width:54px;">
+            {%- if cat.start_date %}
+            <div style="font-size:10px;color:{{ label_fg }};font-weight:700;letter-spacing:0.1em;text-transform:uppercase;">{{ cat.start_date.strftime("%b") }}</div>
+            <div style="font-size:26px;font-weight:700;color:{{ fg }};margin-top:4px;">{{ cat.start_date.strftime("%-d") }}</div>
+            {%- else %}
+            <div style="font-size:13px;color:{{ fg }};font-weight:700;letter-spacing:0.08em;padding:6px 0;">TBC</div>
+            {%- endif %}
+          </td>
+        </tr>
+      </table>
+    {%- endmacro -%}
+
+    {%- macro catalogue_card(cat) -%}
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fff;border:1px solid #e3e3de;border-radius:8px;margin-bottom:12px;">
+        <tr>
+          <td style="padding:14px 16px;vertical-align:middle;">
+            <div style="font-size:10px;color:#888;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">{{ cat.house }}</div>
+            <div style="font-size:17px;font-weight:600;color:#1a1a1a;margin-top:3px;">
+              <a href="{{ cat.url }}" style="color:#1a5fb4;text-decoration:none;">{{ cat.name }}</a>
+            </div>
+            <div style="font-size:13px;color:#555;margin-top:4px;">
+              {{ cat.type_icon }} {{ cat.sale_type }}
+              <span style="color:#ccc;margin:0 6px;">&middot;</span>
+              {{ cat.date_label() }}
+            </div>
+            <div style="margin-top:9px;line-height:1.9;">
+              {%- if cat.is_active %}{{ badge("#cce5cc", "#1f4a1f", "ACTIVE") }} {% endif -%}
+              {%- if cat.is_new %}{{ badge("#f5efde", "#6a5a30", "NEW") }} {% endif -%}
+              {%- if cat.online %}{{ badge("#e2e6ea", "#3d4750", "ONLINE") }} {% endif -%}
+              {%- if not cat.is_active and not cat.is_new and cat.status_label and cat.status_label != "Upcoming" %}{{ badge("#ececec", "#555", cat.status_label) }}{% endif -%}
+            </div>
+          </td>
+          <td style="padding:14px 16px;vertical-align:middle;text-align:right;width:1%;white-space:nowrap;">
+            {{ date_tile(cat) }}
+          </td>
+        </tr>
+      </table>
+    {%- endmacro -%}
+
+    {#- ───────── Sections ───────── -#}
+
+    {% if sections %}
+      {% for country, rows in sections %}
+      <h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#666;margin:24px 0 10px;">
+        <span style="font-size:16px;vertical-align:-1px;">{{ country.flag }}</span>&nbsp; {{ country.name }} &middot; {{ rows|length }}
+      </h2>
+      {% for cat in rows %}{{ catalogue_card(cat) }}{% endfor %}
       {% endfor %}
-    </div>
-    {% endfor %}
-  {% else %}
-    <div style="margin-top:24px;background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:20px;text-align:center;color:#6b7280;">
-      No New or Active thoroughbred sales catalogues today.
-    </div>
-  {% endif %}
-
-  <div style="margin-top:26px;font-size:12px;color:#9ca3af;line-height:1.6;">
-    <div>Full list attached as <strong>sales_catalogues_{{ run_date.isoformat() }}.csv</strong>.</div>
-    <div style="margin-top:4px;">Sources: Tattersalls, Tattersalls Ireland, Goffs, Arqana, BBAG, Keeneland, Fasig-Tipton, OBS, Inglis, Magic Millions, NZB, Gavelhouse. Jumps / National Hunt / store sales excluded.</div>
-    {% if diagnostics and diagnostics.get('source_status') %}
-    <div style="margin-top:6px;">Source status: {{ diagnostics.source_status }}</div>
+    {% else %}
+      <div style="background:#fff;border:1px solid #e3e3de;border-radius:8px;padding:20px;">
+        <p style="margin:0;color:#444;font-size:15px;font-weight:600;">No New or Active catalogues today</p>
+        <p style="margin:6px 0 0;color:#888;font-size:13px;">No thoroughbred sale catalogues are new or within their active window. The full forward calendar is attached as CSV.</p>
+      </div>
     {% endif %}
-  </div>
 
-</div>
+    <p style="margin-top:24px;color:#aaa;font-size:11px;line-height:1.5;">
+      Full list attached as <strong style="color:#888;">sales_catalogues_{{ run_date.isoformat() }}.csv</strong>.
+      New = first day a catalogue is listed; Active = from 2 days before the sale through its final day.
+      Jumps / National Hunt / store sales excluded.
+      <br>Sources: Tattersalls, Tattersalls Ireland, Goffs, Arqana, BBAG, Keeneland, Fasig-Tipton, OBS, Inglis, Magic Millions, NZB, Gavelhouse.
+      {%- if diagnostics and diagnostics.get("source_status") %}
+      <br><span style="color:#c4c4c4;">Source status: {{ diagnostics.source_status }}.</span>
+      {%- endif %}
+    </p>
+  </div>
 </body>
 </html>

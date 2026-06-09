@@ -20,7 +20,7 @@ def test_render_groups_and_flags():
         _cat("NZ New Online", "NZ", date(2026, 8, 1), online=True, first_seen=None),
     ]
     payload = render(run_date=REF, catalogues=cats)
-    assert "Daily Sales Catalogues" in payload.html
+    assert "Sales catalogues" in payload.html
     assert "United Kingdom" in payload.html and "New Zealand" in payload.html
     assert "ACTIVE" in payload.html and "NEW" in payload.html and "ONLINE" in payload.html
     # subject reflects counts
