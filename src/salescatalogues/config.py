@@ -3,6 +3,16 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Recipients that always receive the Sales Catalogues digest regardless of the
+# CATALOGUES_EMAIL_TO / EMAIL_TO env vars. Merged with the configured list at
+# send time, deduped case-insensitively, in this order first.
+_ALWAYS_RECIPIENTS: tuple[str, ...] = (
+    "racingsquared@gmail.com",
+    "stuart@blandfordbloodstock.com",
+    "richard@blandfordbloodstock.com",
+    "tom.biggs@blandfordbloodstock.com",
+)
+
 
 class Settings(BaseSettings):
     """Environment-driven configuration for the Daily Sales Catalogues job.
@@ -38,9 +48,11 @@ class Settings(BaseSettings):
     @property
     def email_to_list(self) -> list[str]:
         raw = self.catalogues_email_to or self.email_to
+        configured = raw.replace(";", ",").replace("\n", ",").split(",")
         parts: list[str] = []
         seen: set[str] = set()
-        for chunk in raw.replace(";", ",").replace("\n", ",").split(","):
+        # Always-on recipients first, then any env-configured addresses.
+        for chunk in (*_ALWAYS_RECIPIENTS, *configured):
             addr = chunk.strip()
             if addr and addr.lower() not in seen:
                 seen.add(addr.lower())
