@@ -85,9 +85,27 @@ class RawSale:
     description: str = ""            # free text used for non-TB filtering
     status_hint: str = ""           # source-side status, e.g. "catalogue", "live"
     type_hint: str = ""             # source-side sale-type hint, if any
+    source_key: str = ""            # registry key of the source that produced it
+    catalogue_ref: str = ""         # source-internal id used to fetch the lots
 
     def effective_end(self) -> date | None:
         return self.end_date or self.start_date
+
+
+@dataclass
+class Lot:
+    """One catalogued lot (horse) within a sale. Populated by a source's
+    ``fetch_lots`` once the sale's catalogue is published; sales without a
+    published catalogue have no lots and render as a single summary CSV row."""
+
+    lot_no: str                      # "123", "123A", or a house hip number
+    horse_name: str = ""            # "" when the lot is unnamed
+    sex: str = ""                   # colt/filly/gelding/mare or C/F/G/M
+    colour: str = ""                # bay, chestnut, etc. (when published)
+    sire: str = ""
+    dam: str = ""
+    dam_sire: str = ""              # sire of dam (damsire)
+    vendor: str = ""                # consignor / vendor / seller
 
 
 @dataclass

@@ -25,6 +25,7 @@ from salescatalogues.classify import build_catalogue, is_excluded
 from salescatalogues.config import Settings
 from salescatalogues.config import load as load_settings
 from salescatalogues.emailer import EmailPayload, render, send
+from salescatalogues.lots import collect_lots
 from salescatalogues.models import Catalogue, RawSale
 from salescatalogues.sources.base import make_session
 from salescatalogues.sources.registry import SOURCES
@@ -48,6 +49,8 @@ def collect_raw(session, today: date) -> tuple[list[RawSale], dict[str, str]]:
     for src in SOURCES:
         try:
             rows = src.fetch(session, ref=today)
+            for r in rows:
+                r.source_key = src.key
             raws.extend(rows)
             status[src.key] = f"{len(rows)}"
             log.info("%-22s %d sale(s)", src.label, len(rows))
@@ -129,18 +132,30 @@ def run(*, run_date: date | None = None, dry_run: bool = False) -> int:
         new = sum(1 for c in catalogues if c.is_new)
         log.info("In scope: %d (active=%d, new=%d)", len(catalogues), active, new)
 
+        log.info("Fetching lots for published catalogues...")
+        lots_by_id, lot_counts = collect_lots(catalogues, session)
+        total_lots = sum(len(v) for v in lots_by_id.values())
+        log.info("Lots fetched: %d across %d catalogue(s)", total_lots, len(lots_by_id))
+
         diagnostics = {
             "source_status": ", ".join(
                 f"{k}={v}" for k, v in sorted(source_status.items())
             ),
         }
-        payload = render(run_date=today, catalogues=catalogues, diagnostics=diagnostics)
+        payload = render(
+            run_date=today,
+            catalogues=catalogues,
+            lots_by_id=lots_by_id,
+            diagnostics=diagnostics,
+        )
         _write_preview(payload)
 
         summary = {
             "total": len(catalogues),
             "active": active,
             "new": new,
+            "lots": total_lots,
+            "lots_by_source": lot_counts,
             "sources": source_status,
         }
         log.info("summary: %s", summary)

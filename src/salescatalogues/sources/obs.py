@@ -12,17 +12,26 @@ from datetime import date
 
 import lxml.html
 
-from salescatalogues.models import RawSale
-from salescatalogues.sources.base import get_text, make_session, parse_date_range, squash
+from salescatalogues.models import Lot, RawSale
+from salescatalogues.sources.base import (
+    get_json,
+    get_text,
+    make_session,
+    parse_date_range,
+    squash,
+)
 
 log = logging.getLogger(__name__)
 
 URL = "https://obssales.com/"
 BASE = "https://obssales.com"
+LOTS_API = "https://obssales.com/wp-json/obs-catalog-wp-plugin/v1/horse-sales/{sale_id}"
 
 _DATEY_RE = re.compile(
     r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*.*?20\d{2}", re.IGNORECASE
 )
+# Numeric sale id in the catalog app link, e.g. "/catalog/#/151".
+_CAT_ID_RE = re.compile(r"/catalog/#?/?(\d+)")
 
 
 def parse_home(html: str, *, ref: date) -> list[RawSale]:
@@ -52,6 +61,7 @@ def parse_home(html: str, *, ref: date) -> list[RawSale]:
         seen.add(name.lower())
         href = title[0].get("href") or ""
         url = href if href.startswith("http") else f"{BASE}{href}" if href else URL
+        m = _CAT_ID_RE.search(href)
         out.append(
             RawSale(
                 house="OBS",
@@ -61,6 +71,7 @@ def parse_home(html: str, *, ref: date) -> list[RawSale]:
                 end_date=end,
                 url=url,
                 online="online" in name.lower(),
+                catalogue_ref=m.group(1) if m else "",
             )
         )
     return out
@@ -75,3 +86,33 @@ def fetch(session=None, *, ref: date | None = None) -> list[RawSale]:
         log.warning("OBS fetch failed: %s", exc)
         return []
     return parse_home(html, ref=ref)
+
+
+def parse_lots(data: dict) -> list[Lot]:
+    lots: list[Lot] = []
+    for hip in (data or {}).get("sale_hip") or []:
+        lots.append(
+            Lot(
+                lot_no=str(hip.get("hip_number") or "").strip(),
+                horse_name=(hip.get("horse_name") or "").strip(),
+                sex=(hip.get("sex") or "").strip(),
+                colour=(hip.get("color") or "").strip(),
+                sire=(hip.get("sire_name") or "").strip(),
+                dam=(hip.get("dam_name") or "").strip(),
+                dam_sire=(hip.get("dam_sire") or "").strip(),
+                vendor=(hip.get("consignor_name") or hip.get("consignor_sort") or "").strip(),
+            )
+        )
+    return lots
+
+
+def fetch_lots(raw: RawSale, session=None) -> list[Lot]:
+    if not raw.catalogue_ref:
+        return []
+    session = session or make_session()
+    try:
+        data = get_json(session, LOTS_API.format(sale_id=raw.catalogue_ref))
+    except Exception as exc:  # noqa: BLE001
+        log.warning("OBS lot fetch failed (sale %s): %s", raw.catalogue_ref, exc)
+        return []
+    return parse_lots(data) if isinstance(data, dict) else []

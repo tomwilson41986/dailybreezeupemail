@@ -16,7 +16,7 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 from salescatalogues.classify import group_by_country
 from salescatalogues.config import Settings
 from salescatalogues.csvout import to_csv
-from salescatalogues.models import Catalogue, Country
+from salescatalogues.models import Catalogue, Country, Lot
 
 log = logging.getLogger(__name__)
 
@@ -80,6 +80,7 @@ def render(
     *,
     run_date: date,
     catalogues: list[Catalogue],
+    lots_by_id: dict[str, list[Lot]] | None = None,
     diagnostics: dict[str, Any] | None = None,
 ) -> EmailPayload:
     diagnostics = diagnostics or {}
@@ -110,7 +111,7 @@ def render(
         subject=subject,
         html=html,
         text=text,
-        csv_text=to_csv(catalogues),
+        csv_text=to_csv(catalogues, lots_by_id),
         csv_filename=f"sales_catalogues_{run_date.isoformat()}.csv",
     )
 

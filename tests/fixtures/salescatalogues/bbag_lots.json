@@ -1,0 +1,617 @@
+[
+ {
+  "type": "Auctionlot",
+  "id": 781704,
+  "name": "01 - Alonia",
+  "slug": "01-alonia",
+  "number": 1,
+  "lotLabelMode": "name",
+  "lotIdentifier": 1,
+  "start": "2026-06-03T10:00:00.000000Z",
+  "end": "2026-06-05T14:00:00.000000Z",
+  "serverTime": "2026-06-09T09:43:52.231250Z",
+  "startprice": 0,
+  "bids": {
+   "highest": 2500,
+   "total": 4,
+   "lastBidder": 139215,
+   "history": [
+    {
+     "id": 139215,
+     "amount": 2500,
+     "timestamp": 1780661779.299,
+     "country": "DE"
+    },
+    {
+     "id": 903870,
+     "amount": 2000,
+     "timestamp": 1780657512.2531,
+     "country": "DE"
+    },
+    {
+     "id": 218077,
+     "amount": 1500,
+     "timestamp": 1780506605.271,
+     "country": "DE"
+    },
+    {
+     "id": 205824,
+     "amount": 1000,
+     "timestamp": 1780484426.7062,
+     "country": "CZ"
+    }
+   ]
+  },
+  "auctionslug": "bbag-spring-auction-2026-online",
+  "hreflang": {
+   "en": "01-alonia",
+   "de": "01-alonia",
+   "fr": "01-alonia"
+  },
+  "deactivated": "auctionlot.deactivated.repurchased",
+  "notSold": false,
+  "buynow": null,
+  "minimumPrice": null,
+  "priceCalculator": [
+   {
+    "type": "add-percentage-baseprice",
+    "value": 19,
+    "label": "VAT 19%"
+   },
+   {
+    "type": "add-percentage-baseprice",
+    "value": 1,
+    "label": "Halftergeld 1%"
+   },
+   {
+    "type": "add-percentage-laststep",
+    "value": 19,
+    "label": "Halftergeld VAT 19%"
+   },
+   {
+    "type": "add-percentage-baseprice",
+    "value": 6,
+    "label": "Auction fee 6%"
+   },
+   {
+    "type": "add-percentage-laststep",
+    "value": 19,
+    "label": " Auction fee VAT 19%"
+   }
+  ],
+  "owner": null,
+  "vendor": "Rennstall Smrczek (Agent)",
+  "sponsor": "Rennstall Smrczek (Agent)",
+  "buyer": null,
+  "inTrainingWith": null,
+  "inFoalTo": null,
+  "hotLot": null,
+  "hotLotLimit": null,
+  "rel": {
+   "type": "Horse",
+   "id": 781556,
+   "name": "01 - Alonia",
+   "slug": "01-alonia",
+   "location": "Smrczek, Sascha",
+   "locationGeo": {
+    "latitude": 51.2422292,
+    "longitude": 6.8409952
+   },
+   "teaser": null,
+   "birthday": "Tue, 21 Mar 2023 09:18:08 +0100",
+   "height": "1,63 m",
+   "weight": "422 kg",
+   "heightDate": null,
+   "identificationNumber": null,
+   "nameDescription": null,
+   "breeder": null,
+   "owner": null,
+   "tax": 19,
+   "subjectToVat": null,
+   "prizeMoney": null,
+   "pedigree": {
+    "v": "Japan (GB)",
+    "m": "Alira",
+    "mv": null,
+    "mmv": null
+   },
+   "ancestry": null,
+   "image": {
+    "width": 720,
+    "height": 480,
+    "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/01%20Alonia/68685/image-thumb__68685__auctionlot-card-bbag-auction/WhatsApp%20Image%202026-05-27%20at%2007.19.21.jpg?v=1779864317",
+    "alt": null,
+    "title": null,
+    "copyright": null,
+    "href": null
+   },
+   "performances": [],
+   "race": "Thoroughbred",
+   "sex": "Mare",
+   "color": "chestnut",
+   "discipline": "Racing",
+   "succsess": null,
+   "wffs": null,
+   "embryoLabel": null,
+   "frozenAt": null,
+   "insertedAt": null,
+   "fatherImage": null,
+   "motherImage": null,
+   "insurancePossible": null,
+   "xray": null,
+   "scope": null,
+   "bricks": [
+    {
+     "type": "horsetext",
+     "text": "<p>Contact:<br />\nRennstall Smrczek<br />\nRennbahnstra\u00dfe 26<br />\n40629 D\u00fcsseldorf<br />\nE-Mail: trainer@rennstall-smrczek.de<br />\nMobil: 0049 170 4146382</p>\n\n<p><a href=\"https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/01%20Alonia/Pferdepass%20Alonia.pdf\" target=\"_blank\">Passport Lot 01 Alonia</a></p>\n\n<p><a href=\"https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/01%20Alonia/Gesu%20Alonia.pdf\" target=\"_blank\">Health certificate Lot 01 Alonia</a></p>\n",
+     "userOnly": null
+    },
+    {
+     "type": "horsegallery",
+     "gallery": [
+      {
+       "width": 1146,
+       "height": 860,
+       "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/01%20Alonia/68685/image-thumb__68685__page-brick-gallery/WhatsApp%20Image%202026-05-27%20at%2007.19.21.jpg?v=1779864317",
+       "alt": null,
+       "title": null,
+       "copyright": null,
+       "href": null
+      },
+      {
+       "width": 645,
+       "height": 860,
+       "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/01%20Alonia/68686/image-thumb__68686__page-brick-gallery/WhatsApp%20Image%202026-05-27%20at%2007.19.22.jpg?v=1779864317",
+       "alt": null,
+       "title": null,
+       "copyright": null,
+       "href": null
+      },
+      {
+       "width": 645,
+       "height": 860,
+       "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/01%20Alonia/68660/image-thumb__68660__page-brick-gallery/WhatsApp%20Image%202026-05-26%20at%2017.06.36%281%29.jpg?v=1779808468",
+       "alt": null,
+       "title": null,
+       "copyright": null,
+       "href": null
+      },
+      {
+       "width": 605,
+       "height": 860,
+       "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/01%20Alonia/68661/image-thumb__68661__page-brick-gallery/WhatsApp%20Image%202026-05-26%20at%2017.06.36%282%29.jpg?v=1779808468",
+       "alt": null,
+       "title": null,
+       "copyright": null,
+       "href": null
+      }
+     ],
+     "columnsTablet": 1,
+     "columnsDesktop": 1
+    },
+    {
+     "type": "horseimage",
+     "image": {
+      "width": 993,
+      "height": 1819,
+      "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Pedigrees/Alonia.jpg?v=1779785958",
+      "alt": null,
+      "title": null,
+      "copyright": null,
+      "href": null
+     }
+    },
+    {
+     "type": "horsevideo",
+     "video": {
+      "type": "youtube",
+      "data": "/MgxkwO68BqQ"
+     }
+    },
+    {
+     "type": "horseupdates",
+     "updates": "<p>Nennungen / Entries:<br />\n25.07. Bad Harzburg - BBAG Auktionsrennen - 1.850m</p>\n"
+    }
+   ]
+  }
+ },
+ {
+  "type": "Auctionlot",
+  "id": 781708,
+  "name": "02 - Baroness of Lips (IRE)",
+  "slug": "02-baroness-of-lips-ire",
+  "number": 2,
+  "lotLabelMode": "name",
+  "lotIdentifier": 2,
+  "start": "2026-06-03T10:00:00.000000Z",
+  "end": "2026-06-05T14:02:00.000000Z",
+  "serverTime": "2026-06-09T09:43:52.258037Z",
+  "startprice": 0,
+  "bids": {
+   "highest": 2500,
+   "total": 4,
+   "lastBidder": 138672,
+   "history": [
+    {
+     "id": 138672,
+     "amount": 2500,
+     "timestamp": 1780635708.0286,
+     "country": "DE"
+    },
+    {
+     "id": 879940,
+     "amount": 2000,
+     "timestamp": 1780575526.9914,
+     "country": "DE"
+    },
+    {
+     "id": 138672,
+     "amount": 1500,
+     "timestamp": 1780505086.0342,
+     "country": "DE"
+    },
+    {
+     "id": 115497,
+     "amount": 1000,
+     "timestamp": 1780481950.7382,
+     "country": "CZ"
+    }
+   ]
+  },
+  "auctionslug": "bbag-spring-auction-2026-online",
+  "hreflang": {
+   "en": "02-baroness-of-lips-ire",
+   "de": "02-baroness-of-lips-ire",
+   "fr": "02-baroness-of-lips-ire"
+  },
+  "deactivated": "auctionlot.deactivated.repurchased",
+  "notSold": false,
+  "buynow": null,
+  "minimumPrice": null,
+  "priceCalculator": [
+   {
+    "type": "add-percentage-baseprice",
+    "value": 19,
+    "label": "VAT 19%"
+   },
+   {
+    "type": "add-percentage-baseprice",
+    "value": 1,
+    "label": "Halftergeld 1%"
+   },
+   {
+    "type": "add-percentage-laststep",
+    "value": 19,
+    "label": "Halftergeld VAT 19%"
+   },
+   {
+    "type": "add-percentage-baseprice",
+    "value": 6,
+    "label": "Auction fee 6%"
+   },
+   {
+    "type": "add-percentage-laststep",
+    "value": 19,
+    "label": " Auction fee VAT 19%"
+   }
+  ],
+  "owner": null,
+  "vendor": "Gest\u00fct Etzean (Agent)",
+  "sponsor": "Gest\u00fct Etzean (Agent)",
+  "buyer": null,
+  "inTrainingWith": null,
+  "inFoalTo": null,
+  "hotLot": null,
+  "hotLotLimit": null,
+  "rel": {
+   "type": "Horse",
+   "id": 781558,
+   "name": "02 - Baroness of Lips (IRE)",
+   "slug": "02-baroness-of-lips-ire",
+   "location": "Etzean, Gest\u00fct",
+   "locationGeo": {
+    "latitude": 49.5905028,
+    "longitude": 8.9641907
+   },
+   "teaser": null,
+   "birthday": "Sun, 07 Feb 2021 09:18:08 +0100",
+   "height": "1,65 m",
+   "weight": "532 kg",
+   "heightDate": null,
+   "identificationNumber": null,
+   "nameDescription": null,
+   "breeder": null,
+   "owner": null,
+   "tax": 19,
+   "subjectToVat": null,
+   "prizeMoney": null,
+   "pedigree": {
+    "v": "Highland Reel (IRE)",
+    "m": "Beata (FR)",
+    "mv": null,
+    "mmv": null
+   },
+   "ancestry": null,
+   "image": {
+    "width": 720,
+    "height": 480,
+    "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/02%20Baroness%20of%20Lips/68880/image-thumb__68880__auctionlot-card-bbag-auction/Baroness-Seitlich.jpg?v=1780230674",
+    "alt": null,
+    "title": null,
+    "copyright": null,
+    "href": null
+   },
+   "performances": [],
+   "race": "Thoroughbred",
+   "sex": "Broodmare",
+   "color": "bay",
+   "discipline": "Breeding",
+   "succsess": null,
+   "wffs": null,
+   "embryoLabel": null,
+   "frozenAt": null,
+   "insertedAt": null,
+   "fatherImage": null,
+   "motherImage": null,
+   "insurancePossible": null,
+   "xray": null,
+   "scope": null,
+   "bricks": [
+    {
+     "type": "horsetext",
+     "text": "<p>Contact:<br />\nGest\u00fct Etzean<br />\nOrtsstra\u00dfe 34<br />\n64760 Oberzent<br />\nTel.: +49 (0)69 - 47 99 01<br />\nMobil: +49 172 6 72 62 75</p>\n\n<p><a href=\"https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/02%20Baroness%20of%20Lips/Baroness%20of%20lips.pdf\" target=\"_blank\">Passport Lot 02 - Baroness of Lips (IRE)</a></p>\n\n<p><a href=\"https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/02%20Baroness%20of%20Lips/Baroness%20of%20lips%20Gesu.pdf\" target=\"_blank\">Health certificate Lot 02 - Baroness of Lips (IRE)</a></p>\n\n<p><a href=\"https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/02%20Baroness%20of%20Lips/Lot%202%20Tr%C3%A4chtig.pdf\" target=\"_blank\">Pregnancy certificate Lot 02 - Baroness of Lips (IRE)</a></p>\n",
+     "userOnly": null
+    },
+    {
+     "type": "horsegallery",
+     "gallery": [
+      {
+       "width": 1152,
+       "height": 860,
+       "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/02%20Baroness%20of%20Lips/68880/image-thumb__68880__page-brick-gallery/Baroness-Seitlich.jpg?v=1780230674",
+       "alt": null,
+       "title": null,
+       "copyright": null,
+       "href": null
+      },
+      {
+       "width": 436,
+       "height": 860,
+       "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/02%20Baroness%20of%20Lips/68878/image-thumb__68878__page-brick-gallery/Baroness-Kopf.jpg?v=1780230671",
+       "alt": null,
+       "title": null,
+       "copyright": null,
+       "href": null
+      },
+      {
+       "width": 431,
+       "height": 860,
+       "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/02%20Baroness%20of%20Lips/68879/image-thumb__68879__page-brick-gallery/Baroness-Vorderbeine.jpg?v=1780230674",
+       "alt": null,
+       "title": null,
+       "copyright": null,
+       "href": null
+      },
+      {
+       "width": 434,
+       "height": 860,
+       "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/02%20Baroness%20of%20Lips/68877/image-thumb__68877__page-brick-gallery/Baroness-Hinterhand.jpg?v=1780230671",
+       "alt": null,
+       "title": null,
+       "copyright": null,
+       "href": null
+      }
+     ],
+     "columnsTablet": null,
+     "columnsDesktop": null
+    },
+    {
+     "type": "horseimage",
+     "image": {
+      "width": 993,
+      "height": 1819,
+      "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Pedigrees/Baroness%20of%20Lips%20%28IRE%29.jpg?v=1779785958",
+      "alt": null,
+      "title": null,
+      "copyright": null,
+      "href": null
+     }
+    }
+   ]
+  }
+ },
+ {
+  "type": "Auctionlot",
+  "id": 781709,
+  "name": "03 - Beauty of Lips",
+  "slug": "03-beauty-of-lips",
+  "number": 3,
+  "lotLabelMode": "name",
+  "lotIdentifier": 3,
+  "start": "2026-06-03T10:00:00.000000Z",
+  "end": "2026-06-05T14:04:00.000000Z",
+  "serverTime": "2026-06-09T09:43:52.265320Z",
+  "startprice": 0,
+  "bids": {
+   "highest": 1000,
+   "total": 1,
+   "lastBidder": 205824,
+   "history": [
+    {
+     "id": 205824,
+     "amount": 1000,
+     "timestamp": 1780492789.1126,
+     "country": "CZ"
+    }
+   ]
+  },
+  "auctionslug": "bbag-spring-auction-2026-online",
+  "hreflang": {
+   "en": "03-beauty-of-lips",
+   "de": "03-beauty-of-lips",
+   "fr": "03-beauty-of-lips"
+  },
+  "deactivated": "auctionlot.deactivated.preSold",
+  "notSold": false,
+  "buynow": null,
+  "minimumPrice": null,
+  "priceCalculator": [
+   {
+    "type": "add-percentage-baseprice",
+    "value": 19,
+    "label": "VAT 19%"
+   },
+   {
+    "type": "add-percentage-baseprice",
+    "value": 1,
+    "label": "Halftergeld 1%"
+   },
+   {
+    "type": "add-percentage-laststep",
+    "value": 19,
+    "label": "Halftergeld VAT 19%"
+   },
+   {
+    "type": "add-percentage-baseprice",
+    "value": 6,
+    "label": "Auction fee 6%"
+   },
+   {
+    "type": "add-percentage-laststep",
+    "value": 19,
+    "label": " Auction fee VAT 19%"
+   }
+  ],
+  "owner": null,
+  "vendor": "Stall Parthenaue",
+  "sponsor": "Stall Parthenaue",
+  "buyer": "Barbora Letochova",
+  "inTrainingWith": null,
+  "inFoalTo": null,
+  "hotLot": null,
+  "hotLotLimit": null,
+  "rel": {
+   "type": "Horse",
+   "id": 781560,
+   "name": "03 - Beauty of Lips",
+   "slug": "03-beauty-of-lips",
+   "location": "Paulick, Ralf",
+   "locationGeo": {
+    "latitude": 51.6696422,
+    "longitude": 13.9814438
+   },
+   "teaser": null,
+   "birthday": "Tue, 02 Apr 2019 09:18:08 +0200",
+   "height": "1,71m",
+   "weight": "520kg",
+   "heightDate": null,
+   "identificationNumber": null,
+   "nameDescription": null,
+   "breeder": null,
+   "owner": null,
+   "tax": 19,
+   "subjectToVat": null,
+   "prizeMoney": null,
+   "pedigree": {
+    "v": "Mastercraftsman (IRE)",
+    "m": "Beata (FR)",
+    "mv": null,
+    "mmv": null
+   },
+   "ancestry": null,
+   "image": {
+    "width": 720,
+    "height": 480,
+    "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/03%20Beauty%20of%20Lips/68654/image-thumb__68654__auctionlot-card-bbag-auction/Seite.jpg?v=1779801452",
+    "alt": null,
+    "title": null,
+    "copyright": null,
+    "href": null
+   },
+   "performances": [],
+   "race": "Thoroughbred",
+   "sex": "Broodmare",
+   "color": "bay",
+   "discipline": "Breeding",
+   "succsess": null,
+   "wffs": null,
+   "embryoLabel": null,
+   "frozenAt": null,
+   "insertedAt": null,
+   "fatherImage": null,
+   "motherImage": null,
+   "insurancePossible": null,
+   "xray": null,
+   "scope": null,
+   "bricks": [
+    {
+     "type": "horsetext",
+     "text": "<p>Contact:<br />\nRalf Paulick<br />\nWiesenweg 4<br />\n03229 Luckaitz<br />\nTel.: 035434/12600<br />\nE-Mail: ralf.paulick@googlemail.com</p>\n\n<p><a href=\"https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/03%20Beauty%20of%20Lips/Pferdepass%20Beauty%20of%20Lips.pdf\">Passport Lot 03 Beauty of Lips</a></p>\n\n<p><a href=\"https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/03%20Beauty%20of%20Lips/Gesu%20Beauty%20of%20Lips.pdf\" target=\"_blank\">Health certificate Lot 03 Beauty of Lips</a></p>\n",
+     "userOnly": null
+    },
+    {
+     "type": "horsegallery",
+     "gallery": [
+      {
+       "width": 999,
+       "height": 860,
+       "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/03%20Beauty%20of%20Lips/68654/image-thumb__68654__page-brick-gallery/Seite.jpg?v=1779801452",
+       "alt": null,
+       "title": null,
+       "copyright": null,
+       "href": null
+      },
+      {
+       "width": 1146,
+       "height": 860,
+       "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/03%20Beauty%20of%20Lips/68656/image-thumb__68656__page-brick-gallery/Kopf.jpg?v=1779801460",
+       "alt": null,
+       "title": null,
+       "copyright": null,
+       "href": null
+      },
+      {
+       "width": 645,
+       "height": 860,
+       "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/03%20Beauty%20of%20Lips/68657/image-thumb__68657__page-brick-gallery/Beine%20vorne.jpg?v=1779801462",
+       "alt": null,
+       "title": null,
+       "copyright": null,
+       "href": null
+      },
+      {
+       "width": 645,
+       "height": 860,
+       "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Lots/03%20Beauty%20of%20Lips/68655/image-thumb__68655__page-brick-gallery/Beine%20hinten.jpg?v=1779801458",
+       "alt": null,
+       "title": null,
+       "copyright": null,
+       "href": null
+      }
+     ],
+     "columnsTablet": null,
+     "columnsDesktop": null
+    },
+    {
+     "type": "horseimage",
+     "image": {
+      "width": 993,
+      "height": 1819,
+      "path": "https://backend.3forone.auction/bbag.auction/2026-Auktionen/Fr%C3%BChjahrsauktion/Pedigrees/Beauty%20of%20Lips.jpg?v=1779865978",
+      "alt": null,
+      "title": null,
+      "copyright": null,
+      "href": null
+     }
+    },
+    {
+     "type": "horsevideo",
+     "video": {
+      "type": "youtube",
+      "data": "20aj7k9VB1Q"
+     }
+    }
+   ]
+  }
+ }
+]
