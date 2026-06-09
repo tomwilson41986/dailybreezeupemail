@@ -6,13 +6,14 @@ or a Gavelhouse Plus venue.
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import date
 
 import lxml.html
 
-from salescatalogues.models import RawSale
+from salescatalogues.models import Lot, RawSale
 from salescatalogues.sources.base import get_text, make_session, parse_date_range, squash
 
 log = logging.getLogger(__name__)
@@ -72,3 +73,47 @@ def fetch(session=None, *, ref: date | None = None) -> list[RawSale]:
         log.warning("NZB fetch failed: %s", exc)
         return []
     return parse_upcoming(html, ref=ref)
+
+
+def parse_lots(html: str) -> list[Lot]:
+    """The sale page embeds the full catalogue JSON in the
+    ``#js-sale-table[data-initial-table-data]`` attribute."""
+    doc = lxml.html.fromstring(html)
+    el = doc.cssselect("#js-sale-table")
+    if not el:
+        return []
+    raw = el[0].get("data-initial-table-data") or ""
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    lots: list[Lot] = []
+    for lot in (data.get("lots") if isinstance(data, dict) else data) or []:
+        if not isinstance(lot, dict):
+            continue
+        lots.append(
+            Lot(
+                lot_no=str(lot.get("lot") or "").strip(),
+                horse_name=(lot.get("horsename") or "").strip(),
+                sex=(lot.get("sex") or "").strip(),
+                colour=(lot.get("colour") or "").strip(),
+                sire=(lot.get("sire") or "").strip(),
+                dam=(lot.get("dam") or "").strip(),
+                dam_sire=(lot.get("dam_sire") or "").strip(),
+                vendor=(lot.get("vendor") or "").strip(),
+            )
+        )
+    return lots
+
+
+def fetch_lots(raw: RawSale, session=None) -> list[Lot]:
+    # Online (Gavelhouse-hosted) NZB sales don't carry this table.
+    if raw.online or "/sales/" not in raw.url:
+        return []
+    session = session or make_session()
+    try:
+        html = get_text(session, raw.url)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("NZB lot fetch failed (%s): %s", raw.url, exc)
+        return []
+    return parse_lots(html)

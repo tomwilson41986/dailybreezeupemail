@@ -49,6 +49,20 @@ def get_text(session: requests.Session, url: str, *, timeout: int = 30) -> str:
     return r.text
 
 
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
+def get_json(session: requests.Session, url: str, *, timeout: int = 30):
+    """GET a URL and parse JSON. Returns ``None`` on an empty body (some
+    catalogue APIs return 200 + empty when a sale isn't published yet)."""
+    import json as _json
+
+    r = session.get(url, headers={"Accept": "application/json"}, timeout=timeout)
+    r.raise_for_status()
+    body = r.text.strip()
+    if not body:
+        return None
+    return _json.loads(body)
+
+
 # ---------------------------------------------------------------------------
 # Date parsing
 # ---------------------------------------------------------------------------
@@ -161,3 +175,24 @@ def parse_date_range(
 def squash(text: str) -> str:
     """Collapse whitespace in scraped text."""
     return " ".join((text or "").split())
+
+
+_SEX_CODE = {"C": "Colt", "F": "Filly", "G": "Gelding", "H": "Horse", "M": "Mare"}
+_COLOUR_CODE = {
+    "B": "Bay", "CH": "Chestnut", "GR": "Grey", "BR": "Brown",
+    "BL": "Black", "RO": "Roan", "DKB": "Dark Bay",
+}
+
+
+def split_sex_colour(token: str) -> tuple[str, str]:
+    """Split a UK/IRE colour+sex token like "B.F." or "Ch.C" into
+    ``(sex, colour)`` in readable form. The trailing letter is the sex code
+    (C/F/G/H/M); the leading part is the colour (B, Ch, Gr, Br, Bl, Ro)."""
+    parts = [p for p in token.replace(" ", "").split(".") if p]
+    if not parts:
+        return "", ""
+    sex = _SEX_CODE.get(parts[-1].upper(), "")
+    colour = ""
+    if len(parts) >= 2:
+        colour = _COLOUR_CODE.get(parts[0].upper(), parts[0])
+    return sex, colour

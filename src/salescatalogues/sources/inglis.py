@@ -10,7 +10,7 @@ from datetime import date
 
 import lxml.html
 
-from salescatalogues.models import RawSale
+from salescatalogues.models import Lot, RawSale
 from salescatalogues.sources.base import get_text, make_session, parse_date_range, squash
 
 log = logging.getLogger(__name__)
@@ -64,3 +64,51 @@ def fetch(session=None, *, ref: date | None = None) -> list[RawSale]:
         log.warning("Inglis fetch failed: %s", exc)
         return []
     return parse_calendar(html, ref=ref)
+
+
+def _cell_value(cells, idx: int) -> str:
+    if idx >= len(cells):
+        return ""
+    return (cells[idx].get("data-value") or squash(cells[idx].text_content())).strip()
+
+
+def parse_lots(html: str) -> list[Lot]:
+    """The ``?tab=index`` table has one ``tr#lot_<n>`` per lot, cells carrying a
+    ``data-value`` in the order: lot, media, colour, sex, sire, dam, vendor,
+    purchaser, sold, ts. Damsire isn't published on this view."""
+    doc = lxml.html.fromstring(html)
+    lots: list[Lot] = []
+    for row in doc.cssselect('tr[id^="lot_"]'):
+        cells = row.cssselect("td")
+        if not cells:
+            continue
+        lot_no = _cell_value(cells, 0)
+        if not lot_no:
+            continue
+        # Vendor: the visible link text is the clean name (data-value is a slug).
+        vendor = squash(cells[6].text_content()) if len(cells) > 6 else ""
+        lots.append(
+            Lot(
+                lot_no=lot_no,
+                sex=_cell_value(cells, 3),
+                colour=_cell_value(cells, 2),
+                sire=_cell_value(cells, 4),
+                dam=_cell_value(cells, 5),
+                vendor=vendor,
+            )
+        )
+    return lots
+
+
+def fetch_lots(raw: RawSale, session=None) -> list[Lot]:
+    # Inglis Digital (online) lots are behind an auth0-gated API; skip them.
+    if raw.online or "inglis.com.au/sale/" not in raw.url:
+        return []
+    session = session or make_session()
+    sep = "&" if "?" in raw.url else "?"
+    try:
+        html = get_text(session, f"{raw.url}{sep}tab=index")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Inglis lot fetch failed (%s): %s", raw.url, exc)
+        return []
+    return parse_lots(html)

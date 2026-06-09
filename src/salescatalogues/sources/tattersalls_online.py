@@ -6,16 +6,21 @@ is open. Dates omit the year.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
 
 import lxml.html
 
-from salescatalogues.models import RawSale
+from salescatalogues.models import Lot, RawSale
+from salescatalogues.sources import tattersalls
 from salescatalogues.sources.base import get_text, make_session, parse_date_range, squash
 
 log = logging.getLogger(__name__)
 
 URL = "https://www.tattersallsonline.com/"
+LOT_HOST = "secure.tattersalls.com"
+# Sale code in the online sale link, e.g. /online/OA126/Main or /online/ER226/.
+_CODE_RE = re.compile(r"/online/([A-Za-z0-9]+)")
 
 
 def parse_home(html: str, *, ref: date) -> list[RawSale]:
@@ -39,6 +44,7 @@ def parse_home(html: str, *, ref: date) -> list[RawSale]:
 
         link = block.cssselect("a")
         href = next((a.get("href") for a in link if a.get("href")), "") or URL
+        code_m = _CODE_RE.search(href)
         out.append(
             RawSale(
                 house="Tattersalls Online",
@@ -49,6 +55,7 @@ def parse_home(html: str, *, ref: date) -> list[RawSale]:
                 url=href,
                 online=True,
                 status_hint=status,
+                catalogue_ref=code_m.group(1) if code_m else "",
             )
         )
     return out
@@ -63,3 +70,20 @@ def fetch(session=None, *, ref: date | None = None) -> list[RawSale]:
         log.warning("Tattersalls Online fetch failed: %s", exc)
         return []
     return parse_home(html, ref=ref)
+
+
+def fetch_lots(raw: RawSale, session=None) -> list[Lot]:
+    """Online sales run on the same 4D backend as the main Tattersalls catalogue
+    (host secure.tattersalls.com), so reuse that listing parser."""
+    code = raw.catalogue_ref
+    if not code:
+        return []
+    session = session or make_session()
+    base = f"https://{LOT_HOST}/4DCGI/Sale/{code}"
+    try:
+        session.get(f"{base}/Main/Overview", timeout=30)  # seed cookies
+        html = get_text(session, base)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Tattersalls Online lot fetch failed (%s): %s", code, exc)
+        return []
+    return tattersalls.parse_lots(html)

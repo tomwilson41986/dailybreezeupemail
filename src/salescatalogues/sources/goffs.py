@@ -13,8 +13,14 @@ from datetime import date
 
 import lxml.html
 
-from salescatalogues.models import RawSale
-from salescatalogues.sources.base import get_text, make_session, parse_date_range, squash
+from salescatalogues.models import Lot, RawSale
+from salescatalogues.sources.base import (
+    get_text,
+    make_session,
+    parse_date_range,
+    split_sex_colour,
+    squash,
+)
 
 log = logging.getLogger(__name__)
 
@@ -87,3 +93,60 @@ def fetch(session=None, *, ref: date | None = None) -> list[RawSale]:
         log.warning("Goffs fetch failed: %s", exc)
         return []
     return parse_upcoming(html, ref=ref)
+
+
+_VENDOR_SEL = (
+    ".lot-table__desktop-lot-cell--small-text"
+    ":not(.lot-table__desktop-lot-cell-lot-year)"
+    ":not(.lot-table__desktop-lot-cell-lot-color)"
+)
+
+
+def parse_lots(html: str) -> list[Lot]:
+    """Parse the sale page's lot table. Youngstock are unnamed, so each lot is
+    identified by Sire × Dam; the colour+sex token is e.g. "Ch.C". Damsire isn't
+    published in this view."""
+    doc = lxml.html.fromstring(html)
+    lots: list[Lot] = []
+    for a in doc.cssselect("a.lot-table__lot"):
+        num = a.cssselect(".lot-table__desktop-lot-cell-lot-number")
+        if not num:
+            continue
+        lot_no = squash(num[0].text_content())
+        name_cell = a.cssselect(".lot-table__desktop-lot-cell-lot-name")
+        sire = dam = ""
+        if name_cell:
+            sire = (name_cell[0].text or "").strip()
+            for sp in name_cell[0].cssselect("span"):
+                if (sp.text or "").strip() == "x":
+                    dam = (sp.tail or "").strip()
+                    break
+        colour_el = a.cssselect(".lot-table__desktop-lot-cell-lot-color")
+        sex, colour = split_sex_colour(
+            squash(colour_el[0].text_content())
+        ) if colour_el else ("", "")
+        vendor_el = a.cssselect(_VENDOR_SEL)
+        vendor = squash(vendor_el[0].text_content()) if vendor_el else ""
+        lots.append(
+            Lot(
+                lot_no=lot_no,
+                sex=sex,
+                colour=colour,
+                sire=sire,
+                dam=dam,
+                vendor=vendor,
+            )
+        )
+    return lots
+
+
+def fetch_lots(raw: RawSale, session=None) -> list[Lot]:
+    if "/sale/" not in raw.url:
+        return []
+    session = session or make_session()
+    try:
+        html = get_text(session, raw.url)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Goffs lot fetch failed (%s): %s", raw.url, exc)
+        return []
+    return parse_lots(html)

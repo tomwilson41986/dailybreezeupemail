@@ -5,17 +5,23 @@ reads "Online" for the digital sales (otherwise the venue).
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
 
 import lxml.html
 
-from salescatalogues.models import RawSale
-from salescatalogues.sources.base import get_text, make_session, parse_date_range, squash
+from salescatalogues.models import Lot, RawSale
+from salescatalogues.sources.base import get_json, get_text, make_session, parse_date_range, squash
 
 log = logging.getLogger(__name__)
 
 URL = "https://www.fasigtipton.com/calendar/2026"
 BASE = "https://www.fasigtipton.com"
+SALES_API = "https://www.fasigtipton.com/django/api/sales/?sale_identifier={code}"
+HORSES_API = "https://www.fasigtipton.com/django/api/horses/?sale={sale_id}"
+
+# The sale's catalogue code, embedded in the sale page's drupalSettings.
+_IDENTIFIER_RE = re.compile(r'"sale_identifier"\s*:\s*"([^"]+)"')
 
 
 def parse_calendar(html: str, *, ref: date) -> list[RawSale]:
@@ -67,3 +73,52 @@ def fetch(session=None, *, ref: date | None = None) -> list[RawSale]:
         log.warning("Fasig-Tipton fetch failed: %s", exc)
         return []
     return parse_calendar(html, ref=ref)
+
+
+def parse_lots(rows: list) -> list[Lot]:
+    lots: list[Lot] = []
+    for h in rows or []:
+        if not isinstance(h, dict):
+            continue
+        name = (h.get("name") or "").strip()
+        # Unnamed weanlings/2yos publish a "YYYY-DAMNAME" placeholder; blank it.
+        if re.match(r"^\d{4}-", name):
+            name = ""
+        lots.append(
+            Lot(
+                lot_no=str(h.get("hip") or "").strip(),
+                horse_name=name,
+                sex=(h.get("sex") or "").strip(),
+                colour=(h.get("color") or "").strip(),
+                sire=(h.get("sire") or "").strip(),
+                dam=(h.get("dam") or "").strip(),
+                dam_sire=(h.get("sire_of_dam") or "").strip(),
+                vendor=(h.get("consignor_name") or h.get("consignor") or "").strip(),
+            )
+        )
+    return lots
+
+
+def fetch_lots(raw: RawSale, session=None) -> list[Lot]:
+    """Two-step: read the sale's catalogue code off its page, resolve it to the
+    API's numeric sale id, then pull all hips. The separate digital platform
+    (digital.fasigtipton.com) isn't covered."""
+    if "fasigtipton.com" not in raw.url or "digital." in raw.url:
+        return []
+    session = session or make_session()
+    try:
+        page = get_text(session, raw.url)
+        m = _IDENTIFIER_RE.search(page)
+        if not m:
+            return []
+        sales = get_json(session, SALES_API.format(code=m.group(1)))
+        if not sales or not isinstance(sales, list):
+            return []
+        sale_id = sales[0].get("id")
+        if sale_id is None:
+            return []
+        rows = get_json(session, HORSES_API.format(sale_id=sale_id))
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Fasig-Tipton lot fetch failed (%s): %s", raw.url, exc)
+        return []
+    return parse_lots(rows) if isinstance(rows, list) else []

@@ -111,6 +111,14 @@ headings and per-sale-type icons), with the full list attached as a CSV.
   across CI runs via the actions cache.
 - **Active** 🔴: flagged from `ACTIVE_LEAD_DAYS` (default **2**) before the
   sale's first day through its last day.
+- **Lot-level CSV**: the attached CSV lists every catalogued lot (one row per
+  lot: lot no, horse, sex, colour, sire, dam, damsire, vendor) for sales whose
+  catalogue is published. Each source has a `fetch_lots` adapter hitting that
+  house's catalogue API/page (Tattersalls' 4D listing, Goffs' sale page,
+  Arqana's lot grid, OBS/Keeneland/Fasig-Tipton/Gavelhouse/BBAG JSON APIs,
+  Inglis/Magic Millions/NZB tables). Sales without a published catalogue (or
+  behind auth, e.g. Inglis Digital) fall back to a single summary row. Damsire
+  isn't published by every house. Only sales within `HORIZON_DAYS` are listed.
 
 ### How it works
 
