@@ -13,6 +13,8 @@ dependencies = [
   # gets us past Racing Post's Fastly bot challenge from cloud IPs.
   "curl_cffi>=0.7",
   "lxml>=5.2",
+  # cssselect powers lxml's .cssselect() used by the salescatalogues scrapers.
+  "cssselect>=1.2",
   "jinja2>=3.1",
   "pydantic>=2.7",
   "pydantic-settings>=2.3",
@@ -34,6 +36,7 @@ dev = [
 [project.scripts]
 breezeup-daily = "dailybreezeup.daily:main"
 barriertrials-daily = "barriertrials.daily:main"
+salescatalogues-daily = "salescatalogues.daily:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -41,6 +44,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 dailybreezeup = ["schema.sql", "templates/*.j2"]
 barriertrials = ["schema.sql", "templates/*.j2"]
+salescatalogues = ["schema.sql", "templates/*.j2"]
 
 [tool.ruff]
 line-length = 100

@@ -87,6 +87,60 @@ tests/
   fixtures/racingpost/  # captured live HTML/JSON/SVG for offline tests
 ```
 
+## Daily Sales Catalogues (`salescatalogues-daily`)
+
+A second, independent digest: one email a day listing every **New** and
+**Active** thoroughbred sale catalogue worldwide, grouped by country (with flag
+headings and per-sale-type icons), with the full list attached as a CSV.
+
+- **What it pulls**: upcoming/active sales from a dozen auction houses —
+  Tattersalls (UK) & Tattersalls Ireland, Tattersalls Online, Goffs (UK & IRE),
+  Arqana (FR), BBAG (DE), Keeneland / Fasig-Tipton / OBS (US), Inglis / Magic
+  Millions (AUS), and NZB / Gavelhouse (NZ). Online/digital sales are included
+  and flagged.
+- **Sale type**: each sale is bucketed into Yearling, Foal / Weanling,
+  Broodmare, HIT (Horses in Training / Racing Age), Breeze Up (incl. Ready to
+  Run) or Mixed.
+- **Excluded**: Jumps / National Hunt and store sales, plus non-thoroughbred
+  sales (Arabians, point-to-point, etc.). Store sales are the NH pipeline, so
+  they're dropped; a small curated name list (`classify._EXCLUDE_NAMES`) catches
+  well-known NH/store sales whose source listing carries no description to filter
+  on (e.g. the Tattersalls Ireland Derby Sale).
+- **New** 🆕: flagged the first day a catalogue appears in the feed. State is
+  kept in `data/salescatalogues.sqlite` (`seen_catalogue.first_seen`), persisted
+  across CI runs via the actions cache.
+- **Active** 🔴: flagged from `ACTIVE_LEAD_DAYS` (default **2**) before the
+  sale's first day through its last day.
+
+### How it works
+
+1. `sources/registry.py` lists each house's `fetch()`. The job runs them all,
+   isolating failures so one broken site can't sink the digest.
+2. Each source returns `RawSale` records (name, date span, url, online flag, plus
+   any status/description hint). `sources/base.parse_date_range` copes with the
+   dozen published date formats (day-first vs US month-first, single/range/cross-
+   month, ordinals, missing years inferred as the nearest upcoming).
+3. `classify.py` drops out-of-scope sales, classifies the sale type, and sets the
+   New/Active flags. `emailer.py` renders the country-grouped HTML/text and
+   attaches `csvout.to_csv`.
+
+### Where it runs
+
+`.github/workflows/salescatalogues.yml` — 06:00 UTC daily plus manual dispatch
+(date override, dry-run, notify-on-empty). Reuses the same Gmail secrets; set
+`CATALOGUES_EMAIL_TO` to send the digest somewhere other than `EMAIL_TO`.
+
+Local preview (writes `data/catalogues_preview.{html,txt,csv}`, no send):
+
+```bash
+.venv/bin/salescatalogues-daily --dry-run
+```
+
+The parsers are tested offline against captured page snapshots in
+`tests/fixtures/salescatalogues/`, so a site redesign that breaks a selector
+fails loudly in `tests/salescatalogues/test_sources.py` rather than silently
+emptying the digest.
+
 ## Caveats
 
 - **Scraping Racing Post is against their ToS.** The scrapers use browser-like headers, a warm-up request, and sleeps between per-race fetches. Monitor logs — if RP tightens, bump the curl_cffi `impersonate` version or adjust `_DOC_HEADERS` / `_XHR_HEADERS`.

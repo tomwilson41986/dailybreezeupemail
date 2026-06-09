@@ -1,0 +1,112 @@
+name: daily-sales-catalogues
+
+# One scheduled run per day plus manual dispatch.
+#   06:00 UTC - build the Daily Sales Catalogues digest: every New and Active
+#               thoroughbred sale catalogue worldwide, grouped by country, with
+#               the full list attached as CSV. Jumps / National Hunt / store
+#               sales are excluded. Suppressed when empty unless
+#               notify_on_empty=true.
+#
+# The job scrapes a dozen auction-house sites. As with the breeze-up job it uses
+# curl_cffi (impersonate=chrome124) so cloud-IP runs aren't bot-blocked; per-
+# source failures are isolated so one broken site never sinks the whole digest.
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "YYYY-MM-DD to process (default: today UK)"
+        required: false
+      dry_run:
+        description: "Render but do not send"
+        required: false
+        default: "false"
+      notify_on_empty:
+        description: "Send the digest even when there are no New/Active catalogues. 'true' or 'false'."
+        required: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/London
+      GMAIL_USER:         ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      EMAIL_FROM:         ${{ secrets.EMAIL_FROM }}
+      # Recipients: a dedicated CATALOGUES_EMAIL_TO if set, else fall back to the
+      # shared EMAIL_TO used by the breeze-up job.
+      CATALOGUES_EMAIL_TO: ${{ secrets.CATALOGUES_EMAIL_TO }}
+      EMAIL_TO:           ${{ secrets.EMAIL_TO }}
+      NOTIFY_ON_EMPTY: >-
+        ${{ github.event.inputs.notify_on_empty
+            || vars.CATALOGUES_NOTIFY_ON_EMPTY
+            || 'false' }}
+      ACTIVE_LEAD_DAYS: ${{ vars.CATALOGUES_ACTIVE_LEAD_DAYS || '2' }}
+      HORIZON_DAYS:     ${{ vars.CATALOGUES_HORIZON_DAYS || '120' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e .
+
+      # Persist the SQLite seen-catalogue ledger across runs so the "New" flag
+      # only fires the first time a catalogue appears. Unique key per run with a
+      # restore-keys prefix means we always save a fresh snapshot and restore the
+      # most recent one.
+      - name: Restore DB cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/salescatalogues.sqlite
+            data/salescatalogues.sqlite-shm
+            data/salescatalogues.sqlite-wal
+          key: salescatalogues-db-v1-${{ github.run_id }}
+          restore-keys: |
+            salescatalogues-db-v1-
+
+      - name: Run daily job
+        run: |
+          args=""
+          if [ -n "${{ github.event.inputs.date }}" ]; then args="$args --date ${{ github.event.inputs.date }}"; fi
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then args="$args --dry-run"; fi
+          python -m salescatalogues.daily $args
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Daily Sales Catalogues"
+            echo ""
+            echo "- date: \`${{ github.event.inputs.date || 'today UK' }}\`"
+            echo "- dry_run: \`${{ github.event.inputs.dry_run || 'false' }}\`"
+            echo "- active_lead_days: \`${ACTIVE_LEAD_DAYS}\`"
+            echo "- horizon_days: \`${HORIZON_DAYS}\`"
+            if [ -f data/catalogues_preview.txt ]; then
+              echo ""
+              echo "<details><summary>Plain-text preview</summary>"
+              echo ""
+              echo '```'
+              cat data/catalogues_preview.txt
+              echo '```'
+              echo ""
+              echo "</details>"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalogues-preview-${{ github.run_id }}
+          path: |
+            data/catalogues_preview.html
+            data/catalogues_preview.txt
+            data/catalogues_preview.csv
+          if-no-files-found: ignore
