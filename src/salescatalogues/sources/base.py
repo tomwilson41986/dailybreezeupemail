@@ -78,6 +78,7 @@ _WEEKDAY_RE = re.compile(
     r"\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\b\.?,?", re.IGNORECASE
 )
 _ORDINAL_RE = re.compile(r"(\d{1,2})(st|nd|rd|th)\b", re.IGNORECASE)
+_TIME_RE = re.compile(r"\b\d{1,2}([:.]\d{2})?\s*[ap]\.?m\.?\b", re.IGNORECASE)
 _YEAR_RE = re.compile(r"\b(20\d{2})\b")
 
 
@@ -85,6 +86,9 @@ def _norm(text: str) -> str:
     s = text.strip().lower()
     s = s.replace("–", "-").replace("—", "-").replace("&", "-")
     s = re.sub(r"\b(to|and)\b", "-", s)
+    # Drop clock times ("5pm", "from 5pm", "10:30am") so the hour isn't mistaken
+    # for a day-of-month (e.g. Goffs' "15 June from 5pm" -> day 15, not day 5).
+    s = _TIME_RE.sub(" ", s)
     s = _WEEKDAY_RE.sub(" ", s)
     s = _ORDINAL_RE.sub(r"\1", s)
     # Drop a leading "from "/"the " and "part N:" style prefixes the day scan

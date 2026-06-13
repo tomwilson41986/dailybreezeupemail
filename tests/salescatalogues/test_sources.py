@@ -14,6 +14,7 @@ from salescatalogues.sources import (
     inglis,
     keeneland,
     magicmillions,
+    magicmillions_online,
     nzb,
     obs,
     tattersalls,
@@ -51,6 +52,10 @@ def test_goffs_splits_country_and_excludable_store():
     assert bu is not None and bu.country == "IRE"
     london = _find(rows, "London Sale")
     assert london is not None and london.country == "UK"
+    # The published date ("15 June from 5pm") must not leak the "5pm" hour as a
+    # bogus end-of-month, which would mark the sale finished and drop it.
+    assert london.start_date == date(2026, 6, 15)
+    assert london.effective_end() >= london.start_date
     arkle = _find(rows, "Arkle Sale Part 1")
     assert arkle is not None
     assert "store" in arkle.description.lower()  # used by the NH exclusion
@@ -108,6 +113,23 @@ def test_magicmillions_year_from_name():
     rows = magicmillions.parse_upcoming(_read("magicmillions_upcoming.html"), ref=REF)
     gc = _find(rows, "Gold Coast Yearling")
     assert gc is not None and gc.start_date == date(2027, 1, 13)
+
+
+def test_magicmillions_online_digital_sales():
+    rows = magicmillions_online.parse_calendar(
+        _read("magicmillions_online_calendar.html"), ref=REF
+    )
+    assert rows, "expected the MM digital sales calendar to yield sales"
+    assert all(r.online and r.country == "AUS" for r in rows)
+    current = _find(rows, "12-17 JUN")
+    assert current is not None
+    assert current.start_date == date(2026, 6, 12)
+    assert current.end_date == date(2026, 6, 17)
+    # cross-month range parsed off the calendar-export link
+    crossing = _find(rows, "26 Jun-01 Jul")
+    assert crossing is not None
+    assert crossing.start_date == date(2026, 6, 26)
+    assert crossing.end_date == date(2026, 7, 1)
 
 
 def test_nzb_dates_and_online():

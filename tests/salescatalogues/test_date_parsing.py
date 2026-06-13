@@ -24,6 +24,10 @@ REF = date(2026, 6, 9)
         # year inferred (nearest upcoming)
         ("16 - 21 January", date(2027, 1, 16), date(2027, 1, 21)),
         ("11 June", date(2026, 6, 11), None),
+        # a trailing clock time must not leak its hour as a day-of-month
+        # (Goffs publishes the London Sale as "15 June from 5pm")
+        ("15 June from 5pm", date(2026, 6, 15), None),
+        ("6 - 8 October 2026 from 10:30am", date(2026, 10, 6), date(2026, 10, 8)),
     ],
 )
 def test_dayfirst(text, start, end):
