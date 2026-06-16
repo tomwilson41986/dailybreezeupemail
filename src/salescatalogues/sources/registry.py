@@ -19,6 +19,7 @@ from salescatalogues.sources import (
     inglis,
     keeneland,
     magicmillions,
+    magicmillions_online,
     nzb,
     obs,
     tattersalls,
@@ -58,6 +59,8 @@ SOURCES: list[Source] = [
     Source("obs", "OBS", obs.fetch, _lots(obs)),
     Source("inglis", "Inglis", inglis.fetch, _lots(inglis)),
     Source("magicmillions", "Magic Millions", magicmillions.fetch, _lots(magicmillions)),
+    Source("magicmillions_online", "Magic Millions Online",
+           magicmillions_online.fetch, _lots(magicmillions_online)),
     Source("nzb", "NZB", nzb.fetch, _lots(nzb)),
     Source("gavelhouse", "Gavelhouse", gavelhouse.fetch, _lots(gavelhouse)),
 ]
