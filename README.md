@@ -35,7 +35,7 @@ Configured under repo settings → Secrets / Variables → Actions. The workflow
 | `GMAIL_USER` | secret | Full Gmail address used to authenticate SMTP. |
 | `GMAIL_APP_PASSWORD` | secret | 16-char [app password](https://myaccount.google.com/apppasswords) (requires 2FA on the account). |
 | `EMAIL_FROM` | secret (optional) | Defaults to `GMAIL_USER`. Must be an alias of the Gmail account or Gmail will rewrite it. |
-| `EMAIL_TO` | secret | Recipient(s), comma-separated. Three Blandford Bloodstock addresses are always included on top of this — see `_ALWAYS_RECIPIENTS` in `config.py`. |
+| `EMAIL_TO` | secret | Recipient(s), comma-separated. Four Blandford Bloodstock addresses are always included on top of this — see `_ALWAYS_RECIPIENTS` in `config.py`. |
 | `SHEET_CSV_URL` | variable (optional) | Override the gSheet for ratings enrichment. Empty falls back to the default sheet. |
 | `NOTIFY_ON_EMPTY` | variable (optional) | `true` to send a morning "nothing today" email on quiet days. Evening always sends regardless. |
 | `ENTRIES_WINDOW_DAYS` | variable (optional) | Default 3. Forward window for the racecards scrape that powers the morning "Entries & declarations" section. |

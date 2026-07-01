@@ -16,6 +16,7 @@ _ALWAYS_RECIPIENTS: tuple[str, ...] = (
     "stuart@blandfordbloodstock.com",
     "richard@blandfordbloodstock.com",
     "tom.biggs@blandfordbloodstock.com",
+    "fred@blandfordbloodstock.com",
 )
 
 

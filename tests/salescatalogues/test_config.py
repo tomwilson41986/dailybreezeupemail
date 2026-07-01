@@ -6,6 +6,11 @@ def test_always_recipients_included_even_when_unset():
     assert s.email_to_list == list(_ALWAYS_RECIPIENTS)
 
 
+def test_fred_is_a_baked_recipient():
+    s = Settings(catalogues_email_to="", email_to="")
+    assert "fred@blandfordbloodstock.com" in s.email_to_list
+
+
 def test_configured_appended_and_deduped():
     # A configured address that's already an always-recipient isn't duplicated;
     # a new one is appended after the always-on block.
