@@ -46,6 +46,12 @@ def test_email_to_list_always_includes_baked_recipients(monkeypatch):
     assert s.email_to_list == list(_ALWAYS_RECIPIENTS)
 
 
+def test_fred_is_a_baked_recipient(monkeypatch):
+    monkeypatch.setenv("EMAIL_TO", "")
+    s = Settings()
+    assert "fred@blandfordbloodstock.com" in s.email_to_list
+
+
 def test_email_to_list_merges_configured_after_baked(monkeypatch):
     monkeypatch.setenv("EMAIL_TO", "extra@example.com, another@example.com")
     s = Settings()
