@@ -1,9 +1,10 @@
 # Daily Breeze-Up Email
 
-Two scheduled emails per day listing breeze-up sale graduates:
+Two scheduled emails per day listing breeze-up sale graduates, plus a Friday weekly digest:
 
 - **Morning (04:00 UTC / 05:00 BST)** — `--mode morning`: entries & declarations for lots running in the next 3 days. Suppressed when empty unless `NOTIFY_ON_EMPTY=true`.
 - **Evening (21:00 UTC)** — `--mode evening`: results for lots that ran today. Always sent — quiet days get a "No Results Today" notice.
+- **Weekly (21:30 UTC Friday)** — `--mode weekly`: the week's results + the season-to-date tables, with the racing-results workbook attached (see below). Sent only to `WEEKLY_EMAIL_TO` (default tom.biggs, who gets this **instead of** the dailies — he's deliberately not in the daily recipient list).
 
 Source is Racing Post's bloodstock sale catalogue (the authoritative join between a lot and its race entry), supplemented by the live racecards index for any entries the catalogue's `entry_details` field hasn't been updated to reflect.
 
@@ -35,7 +36,8 @@ Configured under repo settings → Secrets / Variables → Actions. The workflow
 | `GMAIL_USER` | secret | Full Gmail address used to authenticate SMTP. |
 | `GMAIL_APP_PASSWORD` | secret | 16-char [app password](https://myaccount.google.com/apppasswords) (requires 2FA on the account). |
 | `EMAIL_FROM` | secret (optional) | Defaults to `GMAIL_USER`. Must be an alias of the Gmail account or Gmail will rewrite it. |
-| `EMAIL_TO` | secret | Recipient(s), comma-separated. Four Blandford Bloodstock addresses are always included on top of this — see `_ALWAYS_RECIPIENTS` in `config.py`. |
+| `EMAIL_TO` | secret | Recipient(s), comma-separated. Three Blandford Bloodstock addresses are always included on top of this — see `_ALWAYS_RECIPIENTS` in `config.py`. tom.biggs is weekly-only (see `WEEKLY_EMAIL_TO`). |
+| `WEEKLY_EMAIL_TO` | variable (optional) | Recipient(s) of the Friday weekly summary, comma-separated. Defaults to tom.biggs@blandfordbloodstock.com. These addresses get the weekly instead of the dailies. |
 | `SHEET_CSV_URL` | variable (optional) | Override the gSheet for ratings enrichment. Empty falls back to the default sheet. |
 | `NOTIFY_ON_EMPTY` | variable (optional) | `true` to send a morning "nothing today" email on quiet days. Evening always sends regardless. |
 | `ENTRIES_WINDOW_DAYS` | variable (optional) | Default 3. Forward window for the racecards scrape that powers the morning "Entries & declarations" section. |
@@ -87,6 +89,26 @@ tests/
   fixtures/racingpost/  # captured live HTML/JSON/SVG for offline tests
 ```
 
+## Racing results workbook (`scripts/racing_results_xlsx.py`)
+
+One-shot report of how the gSheet cohort has fared on the track. Joins every
+sheet row to RP's sale catalogues on (sale, lot), pulls each named horse's form
+from the profile-tab endpoint (`/profile/tab/horse/<uid>/x/form`, where
+`rpPostmark` = RPR), and writes an xlsx: the full sheet plus Horse Name / Runs /
+First Time Out RPR / Peak RPR, and a per-Breeze-Rating-band summary (lots,
+runners, avg FTO RPR, avg peak RPR, highest RPR). The build lives in
+`dailybreezeup/results_report.py`; the Friday weekly email attaches the same
+workbook.
+
+```bash
+.venv/bin/pip install -e ".[xlsx]"
+.venv/bin/python scripts/racing_results_xlsx.py --out data/racing_results.xlsx
+```
+
+Same RP bot-filter caveats as the daily email. Behind a TLS-intercepting proxy
+set `RP_IMPERSONATE=chrome110` (Chrome 124's post-quantum ClientHello upsets
+some MITM stacks) and `CURL_CA_BUNDLE=<proxy CA>`.
+
 ## Daily Sales Catalogues (`salescatalogues-daily`)
 
 A second, independent digest: one email a day listing every **New** and
@@ -137,6 +159,8 @@ headings and per-sale-type icons), with the full list attached as a CSV.
 `.github/workflows/salescatalogues.yml` — 06:00 UTC daily plus manual dispatch
 (date override, dry-run, notify-on-empty). Reuses the same Gmail secrets; set
 `CATALOGUES_EMAIL_TO` to send the digest somewhere other than `EMAIL_TO`.
+tom.biggs only receives the Friday edition — see `_FRIDAY_ONLY_RECIPIENTS`
+in `salescatalogues/config.py`.
 
 Local preview (writes `data/catalogues_preview.{html,txt,csv}`, no send):
 

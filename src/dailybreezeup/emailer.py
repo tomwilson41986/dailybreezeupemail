@@ -34,7 +34,7 @@ def _env() -> Environment:
     )
 
 
-def _fmt_card(row: dict[str, Any], *, ran: bool) -> list[str]:
+def _fmt_card(row: dict[str, Any], *, ran: bool, show_date: bool = False) -> list[str]:
     sire = row.get("sheet_sire") or row.get("sire") or ""
     dam = row.get("sheet_dam") or row.get("dam") or ""
     damsire = row.get("damsire") or ""
@@ -62,10 +62,14 @@ def _fmt_card(row: dict[str, Any], *, ran: bool) -> list[str]:
         sp = row.get("sp") or "—"
         off = row.get("off_time")
         race_name = row.get("race_name") or ""
+        date_prefix = (
+            f"{row['race_date']:%a %d %b} · " if show_date and row.get("race_date") else ""
+        )
         time_prefix = f"{off.strftime('%H:%M')} " if off else ""
         race_suffix = f" · {race_name}" if race_name else ""
-        lines.append(f"    ► Finish {finish_label}  ·  SP {sp}")
-        lines.append(f"    ► {time_prefix}{row['course']}{race_suffix}")
+        rpr_suffix = f"  ·  RPR {row['rpr']}" if row.get("rpr") is not None else ""
+        lines.append(f"    ► Finish {finish_label}  ·  SP {sp}{rpr_suffix}")
+        lines.append(f"    ► {date_prefix}{time_prefix}{row['course']}{race_suffix}")
     else:
         off = row.get("off_time")
         time_prefix = f"{off.strftime('%H:%M')} " if off else ""
@@ -105,7 +109,9 @@ def _fmt_card(row: dict[str, Any], *, ran: bool) -> list[str]:
         commercial = " · ".join(p for p in (price, buyer, vendor) if p)
         lines.append(f"    {commercial}")
 
-    lines.append(f"    {row['race_url']}")
+    # Archive-sourced rows (weekly summary) don't carry the race page URL.
+    if row.get("race_url"):
+        lines.append(f"    {row['race_url']}")
     return lines
 
 
@@ -168,14 +174,21 @@ def _render_text(
         f"{total} horse{plural}",
         "",
     ]
-    if mode == "evening":
+    if mode in ("evening", "weekly"):
         if ran_today:
-            parts.append(f"═══ RAN TODAY · {len(ran_today)} ═══")
+            heading = "RAN THIS WEEK" if mode == "weekly" else "RAN TODAY"
+            parts.append(f"═══ {heading} · {len(ran_today)} ═══")
             for row in ran_today:
-                parts.extend(_fmt_card(row, ran=True))
+                parts.extend(_fmt_card(row, ran=True, show_date=mode == "weekly"))
                 parts.append("")
         else:
-            parts.append("No Results Today")
+            parts.append("No Runners This Week" if mode == "weekly" else "No Results Today")
+        if mode == "weekly":
+            parts.append("")
+            parts.append(
+                "Full season racing-results workbook attached "
+                "(per-lot First Time Out / Peak RPR + Breeze Rating bands)."
+            )
         if season_summary:
             parts.append("")
             parts.append(
@@ -246,14 +259,23 @@ def render(
     season_summary: dict[str, Any] | None = None,
 ) -> EmailPayload:
     diagnostics = diagnostics or {}
-    if mode not in ("morning", "evening"):
-        raise ValueError(f"mode must be 'morning' or 'evening', got {mode!r}")
+    if mode not in ("morning", "evening", "weekly"):
+        raise ValueError(f"mode must be 'morning', 'evening' or 'weekly', got {mode!r}")
     silks.assign_silk_cids(entered)
     silks.assign_silk_cids(ran_today)
     env = _env()
     # Each mode owns one section; the other list is ignored even if populated.
-    total = len(ran_today) if mode == "evening" else len(entered)
-    if mode == "evening":
+    # Weekly reuses the results section with ran_today holding the week's runs.
+    total = len(ran_today) if mode in ("evening", "weekly") else len(entered)
+    if mode == "weekly":
+        if total == 0:
+            subject = f"Breeze-up weekly summary — w/e {run_date:%a %d %b %Y} · No Runners"
+        else:
+            subject = (
+                f"Breeze-up weekly summary — w/e {run_date:%a %d %b %Y} "
+                f"({total} run{'' if total == 1 else 's'})"
+            )
+    elif mode == "evening":
         if total == 0:
             subject = f"Breeze-up results — {run_date:%a %d %b %Y} · No Results Today"
         else:
@@ -275,7 +297,7 @@ def render(
         "subject": subject,
         "diagnostics": diagnostics,
         "mode": mode,
-        "season_summary": season_summary if mode == "evening" else None,
+        "season_summary": season_summary if mode in ("evening", "weekly") else None,
     }
     html = env.get_template("email.html.j2").render(**context)
     text = _render_text(
@@ -286,7 +308,7 @@ def render(
         total=total,
         diagnostics=diagnostics,
         mode=mode,
-        season_summary=season_summary if mode == "evening" else None,
+        season_summary=season_summary if mode in ("evening", "weekly") else None,
     )
     return EmailPayload(subject=subject, html=html, text=text)
 
@@ -303,15 +325,27 @@ def _build_message(payload: EmailPayload, sender: str, recipients: list[str]) ->
     return msg
 
 
+# filename extension -> (maintype, subtype) for send()'s attachments.
+_ATTACHMENT_TYPES = {
+    ".xlsx": ("application", "vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    ".csv": ("text", "csv"),
+}
+
+
 def send(
     payload: EmailPayload,
     settings: Settings,
     *,
     silk_rows: list[dict[str, Any]] | None = None,
+    recipients: list[str] | None = None,
+    attachments: list[tuple[str, bytes]] | None = None,
 ) -> None:
     if not settings.gmail_user or not settings.gmail_app_password:
         raise RuntimeError("GMAIL_USER and GMAIL_APP_PASSWORD must be set")
-    recipients = settings.email_to_list
+    # The daily emails go to the merged always+EMAIL_TO list; the weekly
+    # summary passes its own list (weekly_email_to_list).
+    if recipients is None:
+        recipients = settings.email_to_list
     if not recipients:
         raise RuntimeError("EMAIL_TO must be set (comma-separated allowed)")
 
@@ -321,6 +355,10 @@ def send(
         attached = silks.attach_silks(msg, silk_rows)
         if attached:
             log.info("attached %d silk image(s) inline", attached)
+    for filename, blob in attachments or []:
+        ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        maintype, subtype = _ATTACHMENT_TYPES.get(ext, ("application", "octet-stream"))
+        msg.add_attachment(blob, maintype=maintype, subtype=subtype, filename=filename)
 
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
         smtp.ehlo()

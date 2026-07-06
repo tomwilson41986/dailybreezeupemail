@@ -136,10 +136,18 @@ def _build_message(payload: EmailPayload, sender: str, recipients: list[str]) ->
     return msg
 
 
-def send(payload: EmailPayload, settings: Settings) -> None:
+def send(
+    payload: EmailPayload,
+    settings: Settings,
+    *,
+    recipients: list[str] | None = None,
+) -> None:
     if not settings.gmail_user or not settings.gmail_app_password:
         raise RuntimeError("GMAIL_USER and GMAIL_APP_PASSWORD must be set")
-    recipients = settings.email_to_list
+    # Callers pass the date-aware list (config.recipients_for) so Friday-only
+    # subscribers get their weekly edition; the plain property is the fallback.
+    if recipients is None:
+        recipients = settings.email_to_list
     if not recipients:
         raise RuntimeError("CATALOGUES_EMAIL_TO (or EMAIL_TO) must be set")
 

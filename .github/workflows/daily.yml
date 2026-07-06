@@ -8,6 +8,12 @@ name: daily-breezeup-email
 #               Suppressed when empty unless notify_on_empty=true.
 #   21:00 UTC - evening run (--mode evening): results that ran today. Always
 #               sends, even on a quiet day (subject: "No Results Today").
+#   21:30 UTC Friday - weekly run (--mode weekly): the week's results +
+#               season-to-date summary with the racing-results workbook
+#               attached, sent to the weekly-only recipients (WEEKLY_EMAIL_TO,
+#               default tom.biggs — he gets this instead of the dailies).
+#               Runs after the Friday evening job so the archive already has
+#               today's results.
 #
 # 28 Apr 2026: the previous cron attempt failed because the default
 # `requests` library exposes a Python TLS fingerprint that Racing Post's
@@ -21,6 +27,7 @@ on:
   schedule:
     - cron: "0 4 * * *"
     - cron: "0 21 * * *"
+    - cron: "30 21 * * 5"
   workflow_dispatch:
     inputs:
       date:
@@ -35,10 +42,10 @@ on:
         required: false
         default: "false"
       mode:
-        description: "morning (entries) or evening (results). Blank = pick from time of day."
+        description: "morning (entries), evening (results) or weekly (Friday summary + xlsx). Blank = pick from time of day."
         required: false
         type: choice
-        options: ["", "morning", "evening"]
+        options: ["", "morning", "evening", "weekly"]
         default: ""
       entries_window_days:
         description: "Override forward window (days). Blank = use repo default (3)."
@@ -77,8 +84,12 @@ jobs:
       # the cron expression. workflow_dispatch can override via the input.
       RUN_MODE: >-
         ${{ github.event.inputs.mode
+            || (github.event.schedule == '30 21 * * 5' && 'weekly')
             || (github.event.schedule == '0 21 * * *' && 'evening')
             || 'morning' }}
+      # Weekly-summary recipients (they get the Friday email instead of the
+      # dailies). Blank falls back to the in-repo default.
+      WEEKLY_EMAIL_TO: ${{ vars.WEEKLY_EMAIL_TO }}
       # Lets a fork/repo-variable point at a different sheet without code changes.
       SHEET_CSV_URL: ${{ vars.SHEET_CSV_URL }}
 
@@ -91,7 +102,8 @@ jobs:
           cache: pip
 
       - name: Install
-        run: pip install -e .
+        # xlsx extra = openpyxl, needed by the weekly run's attached workbook.
+        run: pip install -e ".[xlsx]"
 
       # Persist the SQLite DB (email_log + results_archive) across runs so
       # the season-to-date summary at the bottom of the evening email
