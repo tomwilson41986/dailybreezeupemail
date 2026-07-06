@@ -33,17 +33,9 @@ from dailybreezeup.racing.rp_sales import _XHR_HEADERS, BASE
 
 log = logging.getLogger(__name__)
 
-# The sheet's "Sale" column uses these short labels; map from the short names
-# sheet.sale_short_name() derives from RP's verbose sale names.
-_LABEL_OVERRIDES = {"Tattersalls Ireland": "Ireland"}
-
-
 def sheet_label_for_sale(sale_name: str) -> str | None:
     """The label the gSheet's "Sale" column uses for an RP sale name."""
-    short = gsheet.sale_short_name(sale_name)
-    if short is None:
-        return None
-    return _LABEL_OVERRIDES.get(short, short)
+    return gsheet.sale_short_name(sale_name)
 
 
 def lot_lookup(lots: Iterable[rp_sales.SaleLot]) -> dict[tuple[str, str], rp_sales.SaleLot]:

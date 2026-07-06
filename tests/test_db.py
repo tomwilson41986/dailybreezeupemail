@@ -118,3 +118,22 @@ def test_upsert_skips_rows_missing_required_keys(tmp_path: Path):
         assert db.upsert_result_row(conn, _payload(lot_id="")) is False
         assert db.upsert_result_row(conn, _payload(race_date=None)) is False
         assert conn.execute("SELECT COUNT(*) FROM results_archive").fetchone()[0] == 0
+
+
+def test_migrate_normalises_old_tatts_ireland_sale_label(tmp_path: Path):
+    """Rows archived before Jul 2026 carry sale_short='Tattersalls Ireland';
+    the label changed to 'Ireland' to match the gSheet, and migrate() rewrites
+    the old rows so the by-sale aggregation doesn't split into two groups."""
+    db_path = tmp_path / "db.sqlite"
+    with db.session(db_path) as conn:
+        db.upsert_result_row(conn, _payload(
+            lot_id="rp-4-2026-05-22-9",
+            sale_short="Tattersalls Ireland",
+            sale_name="Tattersalls Ireland Breeze Up Sale 2026",
+        ))
+    with db.session(db_path) as conn:  # session() runs migrate()
+        labels = {
+            r[0] for r in conn.execute("SELECT sale_short FROM results_archive")
+        }
+    assert "Tattersalls Ireland" not in labels
+    assert "Ireland" in labels
