@@ -121,7 +121,7 @@
       </table>
     {%- endmacro -%}
 
-    {%- macro horse_card(row, ran=false) -%}
+    {%- macro horse_card(row, ran=false, show_date=false) -%}
       {%- set sire = row.sheet_sire or row.sire -%}
       {%- set dam = row.sheet_dam or row.dam -%}
       {%- set price = row.sheet_price or row.price -%}
@@ -167,14 +167,18 @@
                 {{ pos_badge(row.finishing_position, row.total_runners) }}
                 <span style="margin-left:6px;color:#444;">SP {{ row.sp or "—" }}</span>
                 <span style="color:#bbb;margin:0 8px;">|</span>
+                {%- if show_date and row.race_date %}<strong>{{ row.race_date.strftime("%a %d %b") }}</strong> {% endif -%}
                 {%- if row.off_time %}<strong>{{ row.off_time.strftime("%H:%M") }}</strong> {% endif -%}
-                <a href="{{ row.race_url }}" style="color:#1a5fb4;text-decoration:none;font-weight:600;">{{ row.course }}</a>
+                {%- if row.race_url %}<a href="{{ row.race_url }}" style="color:#1a5fb4;text-decoration:none;font-weight:600;">{{ row.course }}</a>
+                {%- else %}<span style="font-weight:600;">{{ row.course }}</span>{% endif -%}
                 {%- if row.race_name %} &middot; <span style="color:#666;">{{ row.race_name }}</span>{% endif %}
+                {%- if row.rpr is defined and row.rpr is not none %} &middot; <span style="color:#444;font-weight:600;">RPR {{ row.rpr }}</span>{% endif %}
               {%- else %}
                 <strong>{{ row.race_date.strftime("%a %d %b") }}</strong>
                 {%- if row.off_time %} <strong>{{ row.off_time.strftime("%H:%M") }}</strong>{% endif %}
                 <span style="color:#bbb;margin:0 8px;">|</span>
-                <a href="{{ row.race_url }}" style="color:#1a5fb4;text-decoration:none;font-weight:600;">{{ row.course }}</a>
+                {%- if row.race_url %}<a href="{{ row.race_url }}" style="color:#1a5fb4;text-decoration:none;font-weight:600;">{{ row.course }}</a>
+                {%- else %}<span style="font-weight:600;">{{ row.course }}</span>{% endif -%}
                 {%- if row.race_name %} &middot; <span style="color:#666;">{{ row.race_name }}</span>{% endif %}
               {%- endif %}
             </div>
@@ -219,16 +223,22 @@
 
     {#- ───────── Sections ───────── -#}
 
-    {% if mode == "evening" %}
+    {% if mode in ("evening", "weekly") %}
       {% if ran_today %}
       <h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#666;margin:24px 0 10px;">
-        Ran today &middot; {{ ran_today|length }}
+        {% if mode == "weekly" %}Ran this week{% else %}Ran today{% endif %} &middot; {{ ran_today|length }}
       </h2>
-      {% for row in ran_today %}{{ horse_card(row, ran=true) }}{% endfor %}
+      {% for row in ran_today %}{{ horse_card(row, ran=true, show_date=(mode == "weekly")) }}{% endfor %}
       {% else %}
       <div style="background:#fff;border:1px solid #e3e3de;border-radius:8px;padding:20px;">
-        <p style="margin:0;color:#444;font-size:15px;font-weight:600;">No Results Today</p>
+        <p style="margin:0;color:#444;font-size:15px;font-weight:600;">{% if mode == "weekly" %}No Runners This Week{% else %}No Results Today{% endif %}</p>
       </div>
+      {% endif %}
+
+      {% if mode == "weekly" %}
+      <p style="margin:14px 0 0;color:#666;font-size:12px;">
+        Full season racing-results workbook attached (per-lot First Time Out / Peak RPR + Breeze Rating bands).
+      </p>
       {% endif %}
 
       {% if season_summary %}

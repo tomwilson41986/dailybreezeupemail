@@ -1,4 +1,9 @@
+from datetime import date
+
 from salescatalogues.config import _ALWAYS_RECIPIENTS, Settings
+
+_FRIDAY = date(2026, 7, 10)
+_THURSDAY = date(2026, 7, 9)
 
 
 def test_always_recipients_included_even_when_unset():
@@ -28,3 +33,25 @@ def test_configured_appended_and_deduped():
 def test_falls_back_to_email_to():
     s = Settings(catalogues_email_to="", email_to="fallback@example.com")
     assert "fallback@example.com" in s.email_to_list
+
+
+def test_tom_biggs_not_on_the_daily_digest():
+    # He opted out of the dailies and only gets the Friday edition.
+    s = Settings(catalogues_email_to="", email_to="")
+    assert "tom.biggs@blandfordbloodstock.com" not in [a.lower() for a in s.email_to_list]
+    assert s.recipients_for(_THURSDAY) == s.email_to_list
+
+
+def test_friday_edition_includes_friday_only_recipients():
+    s = Settings(catalogues_email_to="", email_to="")
+    out = s.recipients_for(_FRIDAY)
+    assert out[: len(_ALWAYS_RECIPIENTS)] == list(_ALWAYS_RECIPIENTS)
+    assert "tom.biggs@blandfordbloodstock.com" in out
+
+
+def test_friday_only_recipient_not_duplicated_when_configured():
+    # An operator who explicitly configures the address keeps it daily; the
+    # Friday merge must not produce a duplicate.
+    s = Settings(catalogues_email_to="Tom.Biggs@blandfordbloodstock.com", email_to="")
+    out = s.recipients_for(_FRIDAY)
+    assert sum(1 for a in out if a.lower() == "tom.biggs@blandfordbloodstock.com") == 1

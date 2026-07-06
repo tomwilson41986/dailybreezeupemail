@@ -71,6 +71,33 @@ def test_email_to_list_dedups_case_insensitively(monkeypatch):
     assert s.email_to_list == [*_ALWAYS_RECIPIENTS, "fresh@example.com"]
 
 
+def test_tom_biggs_not_on_the_dailies(monkeypatch):
+    # He opted out of the daily emails: Fridays he gets the weekly summary
+    # (weekly_email_to) instead.
+    monkeypatch.setenv("EMAIL_TO", "")
+    s = Settings()
+    assert "tom.biggs@blandfordbloodstock.com" not in [a.lower() for a in s.email_to_list]
+
+
+def test_weekly_email_to_defaults_to_tom_biggs(monkeypatch):
+    monkeypatch.delenv("WEEKLY_EMAIL_TO", raising=False)
+    s = Settings()
+    assert s.weekly_email_to_list == ["tom.biggs@blandfordbloodstock.com"]
+
+
+def test_weekly_email_to_empty_env_falls_back_to_default(monkeypatch):
+    # GitHub Actions expands `${{ vars.WEEKLY_EMAIL_TO }}` to "" when unset.
+    monkeypatch.setenv("WEEKLY_EMAIL_TO", "")
+    s = Settings()
+    assert s.weekly_email_to_list == ["tom.biggs@blandfordbloodstock.com"]
+
+
+def test_weekly_email_to_overridable(monkeypatch):
+    monkeypatch.setenv("WEEKLY_EMAIL_TO", "a@example.com, b@example.com")
+    s = Settings()
+    assert s.weekly_email_to_list == ["a@example.com", "b@example.com"]
+
+
 @pytest.fixture(autouse=True)
 def _isolate_env(monkeypatch, tmp_path):
     # Stop a developer's real .env from leaking into these assertions.

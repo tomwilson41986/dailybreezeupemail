@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 from pydantic import Field
@@ -10,9 +11,17 @@ _ALWAYS_RECIPIENTS: tuple[str, ...] = (
     "racingsquared@gmail.com",
     "stuart@blandfordbloodstock.com",
     "richard@blandfordbloodstock.com",
-    "tom.biggs@blandfordbloodstock.com",
     "fred@blandfordbloodstock.com",
 )
+
+# Recipients who only get the digest on a Friday (they opted out of the
+# dailies but still want one edition a week). Appended after the always-on
+# list when the run date is a Friday.
+_FRIDAY_ONLY_RECIPIENTS: tuple[str, ...] = (
+    "tom.biggs@blandfordbloodstock.com",
+)
+
+_FRIDAY = 4  # date.weekday() value
 
 
 class Settings(BaseSettings):
@@ -59,6 +68,16 @@ class Settings(BaseSettings):
                 seen.add(addr.lower())
                 parts.append(addr)
         return parts
+
+    def recipients_for(self, run_date: date) -> list[str]:
+        """The digest recipients for a given run date: the always-on +
+        env-configured list, plus the Friday-only subscribers when the run
+        date is a Friday."""
+        parts = self.email_to_list
+        if run_date.weekday() != _FRIDAY:
+            return parts
+        seen = {addr.lower() for addr in parts}
+        return parts + [a for a in _FRIDAY_ONLY_RECIPIENTS if a.lower() not in seen]
 
 
 def load() -> Settings:

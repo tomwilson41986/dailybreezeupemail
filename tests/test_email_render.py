@@ -346,3 +346,46 @@ def test_evening_without_summary_skips_section():
     )
     assert "Season to date" not in p.html
     assert "SEASON TO DATE" not in p.text
+
+
+def _weekly_row(**over):
+    # Archive-sourced rows carry no race_url / silk_url — the weekly template
+    # must render them without links rather than blowing up.
+    base = _ran_row(horse_name="Weekly Runner", rpr=74)
+    base.pop("race_url")
+    base.update(over)
+    return base
+
+
+def test_weekly_renders_week_results_with_dates():
+    p = render(
+        run_date=date(2026, 7, 10),
+        entered=[_entered_row()],  # ignored in weekly mode
+        ran_today=[_weekly_row(race_date=date(2026, 7, 7))],
+        mode="weekly",
+    )
+    assert "Ran this week" in p.html
+    assert "Weekly Runner" in p.html
+    assert "Tue 07 Jul" in p.html          # weekly cards show the run date
+    assert "RPR 74" in p.html
+    assert "workbook attached" in p.html
+    assert p.subject.startswith("Breeze-up weekly summary")
+    assert "RAN THIS WEEK" in p.text
+    assert "Tue 07 Jul" in p.text
+
+
+def test_weekly_quiet_week_shows_placeholder():
+    p = render(run_date=date(2026, 7, 10), entered=[], ran_today=[], mode="weekly")
+    assert "No Runners This Week" in p.html
+    assert "No Runners" in p.subject
+
+
+def test_evening_card_shows_rpr_when_present():
+    p = render(
+        run_date=date(2026, 4, 24),
+        entered=[],
+        ran_today=[_ran_row(horse_name="Named Runner", rpr=88)],
+        mode="evening",
+    )
+    assert "RPR 88" in p.html
+    assert "RPR 88" in p.text

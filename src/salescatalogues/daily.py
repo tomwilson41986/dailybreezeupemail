@@ -164,7 +164,7 @@ def run(*, run_date: date | None = None, dry_run: bool = False) -> int:
         send_when_empty = settings.notify_on_empty
         if will_send and (catalogues or send_when_empty):
             try:
-                send(payload, settings)
+                send(payload, settings, recipients=settings.recipients_for(today))
                 status = "ok"
             except Exception as exc:  # noqa: BLE001
                 log.exception("email send failed: %s", exc)

@@ -9,13 +9,14 @@ DEFAULT_SHEET_CSV_URL = (
     "12neJo7BsCsHg20m-es5ERkLJCevUzXyMDnvV9-ygrMk/export?format=csv"
 )
 
-# Recipients that always receive every email regardless of the configured
-# EMAIL_TO env var. Merged with EMAIL_TO at send time, deduped case-
-# insensitively, in this order followed by the env-configured addresses.
+# Recipients that always receive every daily email regardless of the
+# configured EMAIL_TO env var. Merged with EMAIL_TO at send time, deduped
+# case-insensitively, in this order followed by the env-configured addresses.
+# tom.biggs is deliberately NOT here: he opted out of the dailies and gets
+# the Friday weekly summary instead (see weekly_email_to).
 _ALWAYS_RECIPIENTS: tuple[str, ...] = (
     "stuart@blandfordbloodstock.com",
     "richard@blandfordbloodstock.com",
-    "tom.biggs@blandfordbloodstock.com",
     "fred@blandfordbloodstock.com",
 )
 
@@ -30,6 +31,10 @@ class Settings(BaseSettings):
 
     email_from: str = ""
     email_to: str = ""
+    # Recipients of the Friday weekly summary (--mode weekly): the week's
+    # results plus the season racing-results workbook attached. Separate from
+    # the daily list — these addresses get the weekly INSTEAD of the dailies.
+    weekly_email_to: str = "tom.biggs@blandfordbloodstock.com"
 
     notify_on_empty: bool = False
     entries_window_days: int = 3
@@ -61,6 +66,15 @@ class Settings(BaseSettings):
             return DEFAULT_SHEET_CSV_URL
         return v
 
+    @field_validator("weekly_email_to", mode="before")
+    @classmethod
+    def _empty_weekly_uses_default(cls, v: object) -> object:
+        # Same GitHub Actions empty-string expansion guard as sheet_csv_url:
+        # an unset ${{ vars.WEEKLY_EMAIL_TO }} must not blank the default.
+        if isinstance(v, str) and not v.strip():
+            return "tom.biggs@blandfordbloodstock.com"
+        return v
+
     @property
     def email_to_list(self) -> list[str]:
         configured = [x.strip() for x in self.email_to.split(",") if x.strip()]
@@ -73,6 +87,10 @@ class Settings(BaseSettings):
             seen.add(key)
             merged.append(addr)
         return merged
+
+    @property
+    def weekly_email_to_list(self) -> list[str]:
+        return [x.strip() for x in self.weekly_email_to.split(",") if x.strip()]
 
 
 def load() -> Settings:

@@ -1,12 +1,16 @@
 """Daily job: pull every current breeze-up catalogue from Racing Post.
 
-Two modes, one per scheduled run:
+Three modes, one per scheduled run:
   morning  - lots entered to run in the next 3 days (entries + declarations)
   evening  - lots that ran today (results); always sent, even when empty
+  weekly   - Friday summary for the weekly-only recipients (WEEKLY_EMAIL_TO):
+             the week's results + season-to-date tables, with the racing-
+             results workbook attached (requires the ``xlsx`` extra)
 
 Usage:
   breezeup-daily --mode morning       # today UK, send entries email
   breezeup-daily --mode evening       # today UK, send results email
+  breezeup-daily --mode weekly        # week-to-date summary + xlsx report
   breezeup-daily --dry-run            # render preview, no send
   breezeup-daily --date 2026-04-24    # force a date
 """
@@ -629,6 +633,190 @@ def _ensure_season_archive(
     return {"days_scraped": days_scraped, "rows_added": rows_added}
 
 
+def _weekly_rows(
+    conn: sqlite3.Connection,
+    week_start: date,
+    week_end: date,
+    all_lots: list[rp_sales.SaleLot],
+) -> list[dict[str, Any]]:
+    """The week's outings from ``results_archive``, rehydrated for the email
+    template: ISO strings back to date/time objects, plus lot metadata
+    (pedigree, vendor/buyer/price) joined back from the live catalogue rows —
+    the archive doesn't store those."""
+    by_lot_id = {lot.lot_id: lot for lot in all_lots}
+    rows: list[dict[str, Any]] = []
+    for raw in conn.execute(
+        "SELECT * FROM results_archive WHERE race_date >= ? AND race_date <= ?",
+        (week_start.isoformat(), week_end.isoformat()),
+    ):
+        row = dict(raw)
+        row["race_date"] = date.fromisoformat(row["race_date"])
+        if row.get("off_time"):
+            try:
+                row["off_time"] = time.fromisoformat(row["off_time"])
+            except ValueError:
+                row["off_time"] = None
+        lot = by_lot_id.get(row["lot_id"])
+        row["lot"] = lot.display_lot if lot else str(row.get("lot_no") or "")
+        if lot is not None:
+            row.setdefault("horse_name", lot.horse_name)
+            row.update({
+                "sire": lot.sire_name,
+                "dam": lot.dam_name,
+                "damsire": lot.sire_of_dam_name,
+                "seller": lot.seller,
+                "buyer": lot.buyer,
+                "price": lot.price_label,
+            })
+        rows.append(row)
+    rows.sort(key=lambda r: (
+        r["race_date"], r.get("off_time") or time(0, 0), r.get("course") or "", r["lot"]
+    ))
+    return rows
+
+
+def run_weekly(
+    *,
+    run_date: date | None = None,
+    dry_run: bool = False,
+    no_send: bool = False,
+) -> int:
+    """Friday weekly summary for the weekly-only recipients: the past 7 days'
+    results + the season-to-date tables, with the racing-results workbook
+    attached. Sent to ``WEEKLY_EMAIL_TO`` only — the daily recipients already
+    saw these results in the evening emails."""
+    from dailybreezeup import results_report
+
+    settings: Settings = load_settings()
+    today = run_date or datetime.now(UK).date()
+    week_start = today - timedelta(days=6)
+
+    with session(settings.db_path) as conn:
+        conn.execute(
+            "INSERT INTO run_log (run_date, started_at, status) VALUES (?, ?, ?)",
+            (today.isoformat(), _utcnow(), "running"),
+        )
+        run_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        diagnostics: dict[str, Any] = {"run_kind": "live", "mode": "weekly"}
+
+        log.info("Discovering breeze-up sales for %d", today.year)
+        sales = rp_sales.discover_sales(today.year)
+        all_lots: list[rp_sales.SaleLot] = []
+        for sale in sales:
+            lots = rp_sales.fetch_lots(sale)
+            log.info("  %s: %d lots", sale.sale_name, len(lots))
+            all_lots.extend(lots)
+        by_uid = {lot.horse_uid: lot for lot in all_lots if lot.horse_uid is not None}
+
+        sheet_rows: list[sheet_mod.SheetRow] = []
+        sheet_index: dict[tuple[int, str, int], sheet_mod.SheetRow] = {}
+        sale_totals: dict[tuple[int, str], int] = {}
+        try:
+            sheet_rows = sheet_mod.fetch_sheet(settings.sheet_csv_url)
+            sheet_index = sheet_mod.index_by_key(sheet_rows)
+            sale_totals = sheet_mod.count_by_sale(sheet_rows)
+            log.info("Sheet rows loaded: %d", len(sheet_rows))
+            diagnostics["sheet_status"] = f"{len(sheet_rows)} rows loaded"
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Sheet fetch failed (%s): proceeding without enrichment", exc)
+            diagnostics["sheet_status"] = f"fetch failed ({exc.__class__.__name__})"
+
+        # Make sure the archive covers the week: scrape today live (the
+        # weekly may run before/without today's evening job), then self-heal
+        # any older gaps the same way the evening run does.
+        try:
+            n_today = _scrape_day_into_archive(
+                conn, today, by_uid, sheet_index, sale_totals
+            )
+            log.info("today's results: %d hit(s)", n_today)
+            fill = _ensure_season_archive(
+                conn,
+                season_start=settings.season_start_date,
+                today=today,
+                by_uid=by_uid,
+                sheet_index=sheet_index,
+                sale_totals=sale_totals,
+            )
+            if fill["days_scraped"]:
+                log.info(
+                    "season backfill: scraped %d historical day(s), +%d archive row(s)",
+                    fill["days_scraped"], fill["rows_added"],
+                )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("archive refresh failed (%s): summary may be incomplete", exc)
+
+        ran_week = _weekly_rows(conn, week_start, today, all_lots)
+        if sheet_index:
+            matched, missing = _enrich_with_sheet(ran_week, sheet_index, sale_totals)
+            log.info("Sheet enrichment (weekly): matched=%d, missing=%d", matched, missing)
+
+        archive_rows = conn.execute(
+            "SELECT * FROM results_archive WHERE sale_year = ?", (today.year,)
+        ).fetchall()
+        season_summary = stats_mod.build_summary(archive_rows)
+        diagnostics["week_runs"] = len(ran_week)
+
+        # The workbook is the headline attachment but never blocks the email:
+        # a failed build just sends the summary without it.
+        attachments: list[tuple[str, bytes]] = []
+        try:
+            if not sheet_rows:
+                raise RuntimeError("sheet unavailable")
+            stats_by_uid = results_report.collect_form_stats(all_lots, rp_sales._make_session())
+            xlsx = results_report.build_workbook_bytes(
+                sheet_rows, results_report.lot_lookup(all_lots), stats_by_uid
+            )
+            attachments.append((f"Breeze Up {today.year} Racing Results.xlsx", xlsx))
+            diagnostics["report_horses"] = len(stats_by_uid)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("racing-results workbook build failed (%s): sending without", exc)
+            diagnostics["report_status"] = f"failed ({exc.__class__.__name__})"
+
+        payload = render(
+            run_date=today,
+            entered=[],
+            ran_today=ran_week,
+            diagnostics=diagnostics,
+            mode="weekly",
+            season_summary=season_summary,
+        )
+        _write_preview(payload)
+
+        summary = {
+            "mode": "weekly",
+            "lots": len(all_lots),
+            "week_runs": len(ran_week),
+            "attachment": bool(attachments),
+        }
+        log.info("summary: %s", summary)
+
+        # The weekly digest always sends (a quiet week still confirms the
+        # report), and is not deduped via email_log — a re-run re-sends.
+        if not (dry_run or no_send):
+            try:
+                send(
+                    payload,
+                    settings,
+                    silk_rows=ran_week,
+                    recipients=settings.weekly_email_to_list,
+                    attachments=attachments,
+                )
+                status = "ok"
+            except Exception as exc:  # noqa: BLE001
+                log.exception("email send failed: %s", exc)
+                status = "failed"
+        else:
+            log.info("skipping send (dry_run=%s, no_send=%s)", dry_run, no_send)
+            status = "dry_run"
+
+        conn.execute(
+            "UPDATE run_log SET finished_at=?, status=?, summary_json=? WHERE id=?",
+            (_utcnow(), status, json.dumps(summary), run_id),
+        )
+
+    return 0 if status in ("ok", "dry_run") else 1
+
+
 def backfill_results(*, from_date: date, to_date: date | None = None) -> int:
     """Scrape RP results for every date in ``[from_date, to_date]`` and write
     matching breeze-up graduate outcomes to ``results_archive``.
@@ -692,8 +880,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-send", action="store_true", help="Alias for --dry-run")
     ap.add_argument("--demo", action="store_true",
                     help="Skip live RP fetch; render with the four real Craven 2026 entered lots")
-    ap.add_argument("--mode", choices=("morning", "evening"), default=None,
-                    help="morning = entries/declarations only; evening = results only "
+    ap.add_argument("--mode", choices=("morning", "evening", "weekly"), default=None,
+                    help="morning = entries/declarations only; evening = results only; "
+                         "weekly = Friday week-to-date summary + xlsx report to the "
+                         "weekly-only recipients "
                          "(default: morning before 14:00 UK, evening after)")
     ap.add_argument("--backfill-from", type=date.fromisoformat, default=None,
                     metavar="YYYY-MM-DD",
@@ -710,6 +900,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     if args.backfill_from is not None:
         return backfill_results(from_date=args.backfill_from, to_date=args.date)
+    if args.mode == "weekly":
+        return run_weekly(run_date=args.date, dry_run=args.dry_run, no_send=args.no_send)
     return run(
         run_date=args.date, dry_run=args.dry_run, no_send=args.no_send, demo=args.demo,
         mode=args.mode,
