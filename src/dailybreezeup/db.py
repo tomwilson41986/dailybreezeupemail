@@ -22,6 +22,14 @@ def migrate(conn: sqlite3.Connection) -> None:
     schema = files("dailybreezeup").joinpath("schema.sql").read_text()
     conn.executescript(schema)
     _backfill_results_archive(conn)
+    # Jul 2026: the Tatts Ireland sale label changed to "Ireland" to match the
+    # gSheet's "Sale" column (the old label broke the ratings join for every
+    # Ireland row). Normalise archived rows so the by-sale aggregation doesn't
+    # split the sale into two groups. Idempotent.
+    conn.execute(
+        "UPDATE results_archive SET sale_short = 'Ireland'"
+        " WHERE sale_short = 'Tattersalls Ireland'"
+    )
     conn.commit()
 
 

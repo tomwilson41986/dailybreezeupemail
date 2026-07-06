@@ -41,7 +41,10 @@ _SALE_ALIASES: tuple[tuple[re.Pattern[str], str], ...] = (
     # the short label here must match exactly for the (year, sale, lot) join.
     (re.compile(r"goffs.*uk", re.I), "Goffs"),
     (re.compile(r"arqana", re.I), "Arqana"),
-    (re.compile(r"tattersalls\s+ireland", re.I), "Tattersalls Ireland"),
+    # The gSheet labels Tattersalls Ireland rows plain "Ireland" — the label
+    # here must match it or the (year, sale, lot) join silently misses every
+    # Ireland row (which is exactly what happened until Jul 2026).
+    (re.compile(r"tattersalls\s+ireland", re.I), "Ireland"),
 )
 
 

@@ -41,7 +41,9 @@ def test_sale_short_name_aliases():
     assert sale_short_name("Tattersalls Craven Breeze Up Sale 2026") == "Craven"
     assert sale_short_name("Goffs UK 2yo Breeze Up Sale 2026") == "Goffs"
     assert sale_short_name("Arqana May 2yo Breeze Up 2026") == "Arqana"
-    assert sale_short_name("Tattersalls Ireland Breeze Up Sale 2026") == "Tattersalls Ireland"
+    # Must equal the gSheet's "Sale" label ("Ireland", not "Tattersalls
+    # Ireland") or the (year, sale, lot) ratings join misses every Ireland row.
+    assert sale_short_name("Tattersalls Ireland Breeze Up Sale 2026") == "Ireland"
     assert sale_short_name("Tattersalls Guineas Horses-in-Training Sale 2026") == "Guineas"
     assert sale_short_name("Some Other Sale") is None
 
