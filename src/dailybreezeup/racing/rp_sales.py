@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import time as wall
 from dataclasses import dataclass
@@ -299,10 +300,17 @@ def _make_session():
     challenge from cloud IPs (GitHub Actions, AWS, etc.). Falls back to
     plain requests if curl_cffi isn't importable for any reason; on a
     home/laptop IP that path normally still works.
+
+    ``RP_IMPERSONATE`` overrides the Chrome version to impersonate (e.g.
+    ``chrome110`` behind TLS-intercepting proxies that reset Chrome 124's
+    post-quantum ClientHello) and ``CURL_CA_BUNDLE`` points curl_cffi at a
+    proxy CA bundle.
     """
     try:
         from curl_cffi import requests as cffi_requests
-        s = cffi_requests.Session(impersonate="chrome124")
+        impersonate = os.environ.get("RP_IMPERSONATE", "chrome124")
+        verify = os.environ.get("CURL_CA_BUNDLE") or os.environ.get("REQUESTS_CA_BUNDLE")
+        s = cffi_requests.Session(impersonate=impersonate, verify=verify or True)
     except ImportError:
         log.warning("curl_cffi not available; falling back to plain requests")
         s = requests.Session()

@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import time as wall
 from collections.abc import Iterable, Mapping
@@ -260,7 +261,9 @@ def _make_session():
     """See dailybreezeup.racing.rp_sales._make_session for rationale."""
     try:
         from curl_cffi import requests as cffi_requests
-        s = cffi_requests.Session(impersonate="chrome124")
+        impersonate = os.environ.get("RP_IMPERSONATE", "chrome124")
+        verify = os.environ.get("CURL_CA_BUNDLE") or os.environ.get("REQUESTS_CA_BUNDLE")
+        s = cffi_requests.Session(impersonate=impersonate, verify=verify or True)
     except ImportError:
         log.warning("curl_cffi not available; falling back to plain requests")
         s = requests.Session()
