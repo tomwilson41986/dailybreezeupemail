@@ -32,6 +32,10 @@ dev = [
   "ruff>=0.5",
   "mypy>=1.10",
 ]
+# scripts/racing_results_xlsx.py
+xlsx = [
+  "openpyxl>=3.1",
+]
 
 [project.scripts]
 breezeup-daily = "dailybreezeup.daily:main"

@@ -87,6 +87,24 @@ tests/
   fixtures/racingpost/  # captured live HTML/JSON/SVG for offline tests
 ```
 
+## Racing results workbook (`scripts/racing_results_xlsx.py`)
+
+One-shot report of how the gSheet cohort has fared on the track. Joins every
+sheet row to RP's sale catalogues on (sale, lot), pulls each named horse's form
+from the profile-tab endpoint (`/profile/tab/horse/<uid>/x/form`, where
+`rpPostmark` = RPR), and writes an xlsx: the full sheet plus Horse Name / Runs /
+First Time Out RPR / Peak RPR, and a per-Breeze-Rating-band summary (lots,
+runners, avg FTO RPR, avg peak RPR, highest RPR).
+
+```bash
+.venv/bin/pip install -e ".[xlsx]"
+.venv/bin/python scripts/racing_results_xlsx.py --out data/racing_results.xlsx
+```
+
+Same RP bot-filter caveats as the daily email. Behind a TLS-intercepting proxy
+set `RP_IMPERSONATE=chrome110` (Chrome 124's post-quantum ClientHello upsets
+some MITM stacks) and `CURL_CA_BUNDLE=<proxy CA>`.
+
 ## Daily Sales Catalogues (`salescatalogues-daily`)
 
 A second, independent digest: one email a day listing every **New** and
