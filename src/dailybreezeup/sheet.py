@@ -15,8 +15,8 @@ import csv
 import io
 import logging
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -143,6 +143,10 @@ def fetch_sheet(url: str = DEFAULT_SHEET_CSV_URL) -> list[SheetRow]:
     }
     r = requests.get(url, timeout=30, allow_redirects=True, headers=headers)
     r.raise_for_status()
+    # The export response carries no charset, so requests falls back to
+    # ISO-8859-1 and mojibakes accented vendor/buyer names ("SociÃ©tÃ©").
+    # Google Sheets CSV export is always UTF-8.
+    r.encoding = "utf-8"
     return parse_sheet_csv(r.text)
 
 
