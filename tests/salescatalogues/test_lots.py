@@ -17,6 +17,7 @@ from salescatalogues.sources import (
     nzb,
     obs,
     tattersalls,
+    thoroughbid,
 )
 
 FX = Path(__file__).resolve().parents[1] / "fixtures" / "salescatalogues"
@@ -125,6 +126,21 @@ def test_gavelhouse_lots_enum_decode():
     assert lots[0].colour  # decoded from the integer enum
 
 
+def test_thoroughbid_lots():
+    lots = thoroughbid.parse_lots(_read("thoroughbid_lots.html"))
+    assert len(lots) == 3
+    # Unnamed youngstock are listed as "\'24 Sire ex Dam" — a placeholder, not
+    # a name — but the pedigree line still gives sire and dam.
+    assert lots[0].lot_no == "1" and lots[0].horse_name == ""
+    assert lots[0].sire == "Blue Point (IRE)" and lots[0].dam == "Golden Pearl (GB)"
+    assert lots[0].sex == "Colt"  # spelled out from the cell's tooltip, not "C"
+    assert lots[0].vendor == "Landfall Stables"
+    named = lots[2]
+    assert named.lot_no == "7" and named.horse_name == "Harpers Frontier (IRE)"
+    assert named.sire == "Sans Frontieres (IRE)" and named.dam == "Daveoin (IRE)"
+    assert named.sex == "Gelding" and named.vendor == "Gordon Elliott Racing"
+
+
 def test_bbag_lots():
     lots = bbag.parse_lots(_json("bbag_lots.json"))
     assert len(lots) == 3
@@ -142,8 +158,17 @@ def test_tattersalls_captures_sale_code():
     assert any(r.catalogue_ref for r in rows), "expected a 4D sale code captured"
 
 
+def test_thoroughbid_captures_collection_id():
+    rows = thoroughbid.parse_collections(
+        _read("thoroughbid_collections.html"),
+        ref=__import__("datetime").date(2026, 7, 29),
+    )
+    assert any(r.catalogue_ref for r in rows), "expected a collection id captured"
+
+
 def test_empty_inputs_return_no_lots():
     assert obs.parse_lots({}) == []
     assert keeneland.parse_lots({}) == []
     assert fasigtipton.parse_lots([]) == []
     assert tattersalls.parse_lots("<html></html>") == []
+    assert thoroughbid.parse_lots("<html></html>") == []

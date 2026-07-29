@@ -116,10 +116,10 @@ A second, independent digest: one email a day listing every **New** and
 headings and per-sale-type icons), with the full list attached as a CSV.
 
 - **What it pulls**: upcoming/active sales from a dozen auction houses —
-  Tattersalls (UK) & Tattersalls Ireland, Tattersalls Online, Goffs (UK & IRE),
-  Arqana (FR), BBAG (DE), Keeneland / Fasig-Tipton / OBS (US), Inglis / Magic
-  Millions (AUS), and NZB / Gavelhouse (NZ). Online/digital sales are included
-  and flagged.
+  Tattersalls (UK) & Tattersalls Ireland, Tattersalls Online, ThoroughBid (UK),
+  Goffs (UK & IRE), Arqana (FR), BBAG (DE), Keeneland / Fasig-Tipton / OBS (US),
+  Inglis / Magic Millions (AUS), and NZB / Gavelhouse (NZ). Online/digital sales
+  are included and flagged.
 - **Sale type**: each sale is bucketed into Yearling, Foal / Weanling,
   Broodmare, HIT (Horses in Training / Racing Age), Breeze Up (incl. Ready to
   Run) or Mixed.
@@ -127,7 +127,9 @@ headings and per-sale-type icons), with the full list attached as a CSV.
   sales (Arabians, point-to-point, etc.). Store sales are the NH pipeline, so
   they're dropped; a small curated name list (`classify._EXCLUDE_NAMES`) catches
   well-known NH/store sales whose source listing carries no description to filter
-  on (e.g. the Tattersalls Ireland Derby Sale).
+  on (e.g. the Tattersalls Ireland Derby Sale). Houses whose every listing repeats
+  NH/point-to-point boilerplate in its marketing copy (ThoroughBid) keep that copy
+  out of `RawSale.description` so their mixed sales aren't dropped wholesale.
 - **New** 🆕: flagged the first day a catalogue appears in the feed. State is
   kept in `data/salescatalogues.sqlite` (`seen_catalogue.first_seen`), persisted
   across CI runs via the actions cache.
@@ -138,9 +140,10 @@ headings and per-sale-type icons), with the full list attached as a CSV.
   catalogue is published. Each source has a `fetch_lots` adapter hitting that
   house's catalogue API/page (Tattersalls' 4D listing, Goffs' sale page,
   Arqana's lot grid, OBS/Keeneland/Fasig-Tipton/Gavelhouse/BBAG JSON APIs,
-  Inglis/Magic Millions/NZB tables). Sales without a published catalogue (or
-  behind auth, e.g. Inglis Digital) fall back to a single summary row. Damsire
-  isn't published by every house. Only sales within `HORIZON_DAYS` are listed.
+  Inglis/Magic Millions/NZB/ThoroughBid tables). Sales without a published
+  catalogue (or behind auth, e.g. Inglis Digital) fall back to a single summary
+  row. Damsire isn't published by every house. Only sales within `HORIZON_DAYS`
+  are listed.
 
 ### How it works
 

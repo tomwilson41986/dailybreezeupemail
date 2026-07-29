@@ -19,6 +19,7 @@ from salescatalogues.sources import (
     obs,
     tattersalls,
     tattersalls_online,
+    thoroughbid,
 )
 
 REF = date(2026, 6, 9)
@@ -154,3 +155,39 @@ def test_gavelhouse_json():
     assert rows[0].start_date == date(2026, 6, 16)
     assert rows[0].end_date == date(2026, 6, 22)
     assert rows[0].online is True
+
+
+def test_thoroughbid_collections():
+    rows = thoroughbid.parse_collections(
+        _read("thoroughbid_collections.html"), ref=date(2026, 7, 29)
+    )
+    assert len(rows) == 3
+    assert all(r.online and r.country == "UK" and r.house == "ThoroughBid" for r in rows)
+    july = _find(rows, "July 26 Sale")
+    # SHOUTED sale names are title-cased; the "26" in the name is the year and
+    # must never be read as a day-of-month.
+    assert july is not None
+    assert july.start_date == date(2026, 7, 30)
+    assert july.end_date is None  # timed sales finish on the bidding day
+    # Catalogue published -> deep link + the id used to fetch its lots.
+    assert july.url == "https://www.thoroughbid.co.uk/collection/76"
+    assert july.catalogue_ref == "76"
+    assert july.status_hint == "catalogue"
+    # Still taking entries -> no lot link, falls back to the calendar page.
+    sept = _find(rows, "September 26 Sale")
+    assert sept is not None and sept.start_date == date(2026, 9, 25)
+    assert sept.catalogue_ref == "" and sept.status_hint == "upcoming"
+
+
+def test_thoroughbid_sales_survive_the_non_tb_filter():
+    """Every ThoroughBid card repeats boilerplate naming the Point2Rules bonus
+    and NH store lots. These are mixed sales, so that blurb must not reach the
+    description and get them dropped as point-to-point / NH sales."""
+    from salescatalogues.classify import classify_sale_type, is_excluded
+
+    rows = thoroughbid.parse_collections(
+        _read("thoroughbid_collections.html"), ref=date(2026, 7, 29)
+    )
+    assert rows and not any(is_excluded(r) for r in rows)
+    assert all(classify_sale_type(r) == "Mixed" for r in rows)
+

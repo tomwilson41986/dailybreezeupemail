@@ -71,6 +71,7 @@ HOUSE_WEBSITE: dict[str, str] = {
     "Tattersalls": "https://www.tattersalls.com",
     "Tattersalls Ireland": "https://www.tattersalls.ie",
     "Tattersalls Online": "https://www.tattersallsonline.com",
+    "ThoroughBid": "https://www.thoroughbid.co.uk",
     "Goffs": "https://www.goffs.com",
     "Goffs UK": "https://www.goffs.com",
     "Arqana": "https://www.arqana.com",
