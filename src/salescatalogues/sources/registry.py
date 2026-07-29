@@ -24,6 +24,7 @@ from salescatalogues.sources import (
     obs,
     tattersalls,
     tattersalls_online,
+    thoroughbid,
 )
 
 FetchFn = Callable[..., list[RawSale]]
@@ -51,6 +52,7 @@ SOURCES: list[Source] = [
     Source("tattersalls", "Tattersalls (UK & IRE)", tattersalls.fetch, _lots(tattersalls)),
     Source("tattersalls_online", "Tattersalls Online", tattersalls_online.fetch,
            _lots(tattersalls_online)),
+    Source("thoroughbid", "ThoroughBid", thoroughbid.fetch, _lots(thoroughbid)),
     Source("goffs", "Goffs (UK & IRE)", goffs.fetch, _lots(goffs)),
     Source("arqana", "Arqana", arqana.fetch, _lots(arqana)),
     Source("bbag", "BBAG", bbag.fetch, _lots(bbag)),
