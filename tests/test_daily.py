@@ -1,7 +1,7 @@
 """Tests for the morning/evening classification glue in dailybreezeup.daily."""
 from __future__ import annotations
 
-from datetime import date, time
+from datetime import date, datetime, time, timezone
 
 from dailybreezeup import daily
 from dailybreezeup import sheet as sheet_mod
@@ -570,3 +570,109 @@ def test_ensure_season_archive_skips_already_scraped_days(tmp_path, monkeypatch)
     assert walked == [date(2026, 4, 3)]
     assert fill["days_scraped"] == 1
     conn.close()
+
+
+# ── Results run date anchoring (delayed cron) ──────────────────────────────
+
+
+def _utc(y: int, m: int, d: int, hh: int, mm: int) -> datetime:
+    return datetime(y, m, d, hh, mm, tzinfo=timezone.utc)
+
+
+def test_evening_run_date_anchors_to_slot_when_cron_crosses_midnight():
+    """The 6 Aug 2026 regression: the 21:00 UTC evening slot started at 00:58
+    UTC on the 7th, so the wall clock said the 7th and the job asked RP for a
+    day that hadn't been raced — the email went out as "No Results Today"
+    while eight graduates had run on the 6th. The run date must follow the
+    slot, not the clock."""
+    got = daily._results_run_date(
+        daily.EVENING_SLOT_UTC, now=_utc(2026, 8, 7, 0, 58)
+    )
+    assert got == date(2026, 8, 6)
+
+
+def test_evening_run_date_is_today_when_cron_fires_on_time():
+    """An on-time (or mildly late) evening run still reports on the day it
+    fired — BST puts 21:00 UTC at 22:00 UK, comfortably before midnight."""
+    got = daily._results_run_date(
+        daily.EVENING_SLOT_UTC, now=_utc(2026, 8, 5, 22, 3)
+    )
+    assert got == date(2026, 8, 5)
+
+
+def test_evening_run_date_anchors_in_winter_when_uk_is_on_gmt():
+    """Outside BST the slot lands at 21:00 UK, so the anchoring has to survive
+    the offset change rather than assuming a fixed +1."""
+    assert daily._results_run_date(
+        daily.EVENING_SLOT_UTC, now=_utc(2026, 1, 15, 21, 30)
+    ) == date(2026, 1, 15)
+    assert daily._results_run_date(
+        daily.EVENING_SLOT_UTC, now=_utc(2026, 1, 16, 1, 0)
+    ) == date(2026, 1, 15)
+
+
+def test_evening_run_date_falls_back_to_wall_clock_outside_grace():
+    """An ad-hoc run in the middle of the day is not a late cron, so it means
+    today — reaching back to the previous slot would be wrong."""
+    got = daily._results_run_date(
+        daily.EVENING_SLOT_UTC, now=_utc(2026, 8, 7, 14, 0)
+    )
+    assert got == date(2026, 8, 7)
+
+
+def test_weekly_run_date_anchors_to_friday_slot_after_midnight():
+    """The Friday 21:30 UTC weekly slot has the same exposure: delayed into
+    Saturday it would shift the whole 7-day window and scrape an unraced day."""
+    got = daily._results_run_date(
+        daily.WEEKLY_SLOT_UTC, now=_utc(2026, 8, 8, 1, 30)
+    )
+    assert got == date(2026, 8, 7)  # the Friday
+
+
+def test_evening_run_reports_on_anchored_date_end_to_end(tmp_path, monkeypatch):
+    """The anchored date has to reach the RP results fetch and the archive, not
+    just the helper — that join is what broke. Simulates the delayed cron: the
+    slot resolves to the 6th while the wall clock has rolled to the 7th."""
+    monkeypatch.chdir(tmp_path)
+    db_path = tmp_path / "test.db"
+
+    def fake_settings():
+        return Settings(
+            gmail_user="u", gmail_app_password="p", email_to="a@b",
+            db_path=db_path, season_start_date=date(2026, 8, 6),
+        )
+    monkeypatch.setattr(daily, "load_settings", fake_settings)
+
+    lot = _lot(horse_uid=1234, entry=None)
+    monkeypatch.setattr(daily.rp_sales, "discover_sales", lambda year: [lot.sale])
+    monkeypatch.setattr(daily.rp_sales, "fetch_lots", lambda sale: [lot])
+    monkeypatch.setattr(daily.sheet_mod, "fetch_sheet", lambda url: [])
+    monkeypatch.setattr(daily.sheet_mod, "index_by_key", lambda rows: {})
+    monkeypatch.setattr(daily.sheet_mod, "count_by_sale", lambda rows: {})
+    monkeypatch.setattr(
+        daily, "_results_run_date", lambda slot, now=None: date(2026, 8, 6)
+    )
+
+    asked: list[date] = []
+
+    def fake_fetch_hits(on, uids):
+        asked.append(on)
+        if on == date(2026, 8, 6):
+            return [_hit(1234, finishing_position="1", race_uid="910567",
+                         race_date=on, rpr=88)]
+        return []
+
+    monkeypatch.setattr(daily.rp_results, "fetch_hits_for_uids", fake_fetch_hits)
+
+    rc = daily.run(mode="evening", dry_run=True)
+    assert rc == 0
+    # The live results fetch asked for the 6th, and the runner it found was
+    # carried into the email body rather than dropped as "No Results Today".
+    assert asked[0] == date(2026, 8, 6)
+    assert "Horse 1234" in daily.PREVIEW_TXT.read_text(encoding="utf-8")
+
+    import sqlite3
+    conn = sqlite3.connect(db_path)
+    rows = conn.execute("SELECT race_date FROM results_archive").fetchall()
+    conn.close()
+    assert [r[0] for r in rows] == ["2026-08-06"]

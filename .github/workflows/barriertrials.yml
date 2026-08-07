@@ -7,6 +7,12 @@ name: barrier-trial-tracker
 #               next few days. Suppressed when empty unless notify_on_empty=true.
 #   21:00 UTC - evening run (--mode evening): results that ran today. Always
 #               sends, even on a quiet day (subject: "No Results Today").
+#               The day it reports on is anchored to this 21:00 slot, not to
+#               the wall clock when the runner starts: GHA cron is best-effort
+#               and on 6 Aug 2026 this slot ran ~4 hours late, starting at
+#               00:58 UTC on the 7th, so the job asked RP for a day that hadn't
+#               been raced. See barriertrials.daily._results_run_date — and if
+#               this cron time is edited, update EVENING_SLOT_UTC to match.
 #
 # Matching is name-first: a horse's Racing Post uid is learned the first time it
 # appears on a racecard/result and reused thereafter. RP's Fastly bot filter

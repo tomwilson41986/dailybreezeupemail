@@ -2,7 +2,9 @@
 
 Three modes, one per scheduled run:
   morning  - lots entered to run in the next 3 days (entries + declarations)
-  evening  - lots that ran today (results); always sent, even when empty
+  evening  - lots that ran today (results); always sent, even when empty.
+             "Today" is the day of the 21:00 UTC slot, not the wall clock when
+             the job starts, so a late cron still reports the right day.
   weekly   - Friday summary for the weekly-only recipients (WEEKLY_EMAIL_TO):
              the week's results + season-to-date tables, with the racing-
              results workbook attached (requires the ``xlsx`` extra)
@@ -43,6 +45,17 @@ log = logging.getLogger("dailybreezeup.daily")
 UK = ZoneInfo("Europe/London")
 PREVIEW_HTML = Path("data/last_preview.html")
 PREVIEW_TXT = Path("data/last_preview.txt")
+
+# Scheduled fire times (UTC) of the two results runs, mirroring the cron
+# expressions in .github/workflows/daily.yml.
+EVENING_SLOT_UTC = time(21, 0)
+WEEKLY_SLOT_UTC = time(21, 30)
+# How late a scheduled results run may start and still be treated as belonging
+# to its slot's racing day. GitHub Actions cron is best-effort and the evening
+# job routinely starts 40-60 minutes late, so the window has to be generous;
+# 8 hours covers any realistic delay while staying short enough that an ad-hoc
+# daytime run still means "today".
+SLOT_GRACE = timedelta(hours=8)
 
 
 def _utcnow() -> str:
@@ -309,6 +322,28 @@ def _write_preview(payload: EmailPayload) -> None:
     PREVIEW_TXT.write_text(payload.text, encoding="utf-8")
 
 
+def _results_run_date(slot_utc: time, now: datetime | None = None) -> date:
+    """The racing day a scheduled results run should report on.
+
+    Both results runs fire close to UK midnight (21:00 UTC is 22:00 BST), so a
+    long enough delay rolls ``datetime.now(UK).date()`` on to the next day and
+    the job scrapes a date that hasn't been raced yet. That is what happened on
+    6 Aug 2026: the 21:00 slot started at 00:58 UTC on the 7th, asked RP for the
+    7th, and emailed "No Results Today" while eight graduates had run.
+
+    Anchor to the most recent slot instead of the wall clock, but only while the
+    run is still within ``SLOT_GRACE`` of it — past that this is an ad-hoc run
+    rather than a late cron, and "today" is the honest answer.
+    """
+    now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    slot = datetime.combine(now.date(), slot_utc, tzinfo=timezone.utc)
+    if slot > now:
+        slot -= timedelta(days=1)
+    if now - slot > SLOT_GRACE:
+        return now.astimezone(UK).date()
+    return slot.astimezone(UK).date()
+
+
 def _default_mode(now: datetime | None = None) -> str:
     """Pick morning vs evening based on UK local hour when --mode isn't given.
 
@@ -327,10 +362,18 @@ def run(
     mode: str | None = None,
 ) -> int:
     settings: Settings = load_settings()
-    today = run_date or datetime.now(UK).date()
     mode = mode or _default_mode()
     if mode not in ("morning", "evening"):
         raise ValueError(f"mode must be 'morning' or 'evening', got {mode!r}")
+    # The morning email is forward-looking, so the wall clock is always right
+    # for it. The evening results run has to be anchored to its cron slot or a
+    # delayed start reports on the wrong day — see _results_run_date.
+    if run_date is not None:
+        today = run_date
+    elif mode == "evening":
+        today = _results_run_date(EVENING_SLOT_UTC)
+    else:
+        today = datetime.now(UK).date()
 
     with session(settings.db_path) as conn:
         conn.execute(
@@ -347,6 +390,16 @@ def run(
             "run_kind": "demo" if demo else "live",
             "mode": mode,
         }
+        # A results run that started late enough to cross UK midnight is the
+        # failure this anchoring exists to prevent, so say so out loud rather
+        # than silently reporting on a different day than the clock suggests.
+        wall_clock_today = datetime.now(UK).date()
+        if today != wall_clock_today:
+            log.warning(
+                "reporting on %s, not the UK wall-clock date %s "
+                "(delayed cron run or explicit --date)", today, wall_clock_today,
+            )
+            diagnostics["wall_clock_date"] = wall_clock_today.isoformat()
         if demo:
             log.warning("DEMO MODE: using static fixture lots, no live RP fetch")
             all_lots = rp_sales.demo_lots()
@@ -688,7 +741,10 @@ def run_weekly(
     from dailybreezeup import results_report
 
     settings: Settings = load_settings()
-    today = run_date or datetime.now(UK).date()
+    # Anchored to the Friday 21:30 UTC slot for the same reason as the evening
+    # run: a delayed start would otherwise roll the week on to Saturday and
+    # scrape a day that hasn't been raced. See _results_run_date.
+    today = run_date or _results_run_date(WEEKLY_SLOT_UTC)
     week_start = today - timedelta(days=6)
 
     with session(settings.db_path) as conn:

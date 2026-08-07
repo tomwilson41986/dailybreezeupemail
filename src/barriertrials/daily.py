@@ -54,6 +54,13 @@ UK = ZoneInfo("Europe/London")
 PREVIEW_HTML = Path("data/bt_last_preview.html")
 PREVIEW_TXT = Path("data/bt_last_preview.txt")
 
+# Scheduled fire time (UTC) of the evening results run, mirroring the cron in
+# .github/workflows/barriertrials.yml.
+EVENING_SLOT_UTC = time(21, 0)
+# How late that run may start and still be treated as belonging to its slot's
+# racing day — see _results_run_date. Mirrors dailybreezeup.daily.
+SLOT_GRACE = timedelta(hours=8)
+
 
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -283,6 +290,28 @@ def _write_preview(payload: EmailPayload) -> None:
     PREVIEW_TXT.write_text(payload.text, encoding="utf-8")
 
 
+def _results_run_date(slot_utc: time, now: datetime | None = None) -> date:
+    """The racing day a scheduled evening run should report on.
+
+    The evening slot fires at 21:00 UTC (22:00 BST), close enough to UK
+    midnight that a delayed start rolls ``datetime.now(UK).date()`` on to the
+    next day and the job scrapes a date that hasn't been raced yet. GitHub
+    Actions cron is best-effort: on 6 Aug 2026 this slot started at 00:58 UTC
+    on the 7th and both daily emails reported on the wrong day.
+
+    Anchor to the most recent slot instead of the wall clock, but only while
+    the run is still within ``SLOT_GRACE`` of it — past that this is an ad-hoc
+    run rather than a late cron, and "today" is the honest answer.
+    """
+    now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    slot = datetime.combine(now.date(), slot_utc, tzinfo=timezone.utc)
+    if slot > now:
+        slot -= timedelta(days=1)
+    if now - slot > SLOT_GRACE:
+        return now.astimezone(UK).date()
+    return slot.astimezone(UK).date()
+
+
 def _default_mode(now: datetime | None = None) -> str:
     now = now or datetime.now(UK)
     return "morning" if now.hour < 14 else "evening"
@@ -354,10 +383,18 @@ def run(
     mode: str | None = None,
 ) -> int:
     settings: Settings = load_settings()
-    today = run_date or datetime.now(UK).date()
     mode = mode or _default_mode()
     if mode not in ("morning", "evening"):
         raise ValueError(f"mode must be 'morning' or 'evening', got {mode!r}")
+    # The morning email is forward-looking, so the wall clock is always right
+    # for it. The evening results run has to be anchored to its cron slot or a
+    # delayed start reports on the wrong day — see _results_run_date.
+    if run_date is not None:
+        today = run_date
+    elif mode == "evening":
+        today = _results_run_date(EVENING_SLOT_UTC)
+    else:
+        today = datetime.now(UK).date()
 
     with session(settings.db_path) as conn:
         conn.execute(
@@ -367,6 +404,16 @@ def run(
         run_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
         diagnostics: dict[str, Any] = {"run_kind": "demo" if demo else "live", "mode": mode}
+        # A results run that started late enough to cross UK midnight is the
+        # failure the anchoring exists to prevent, so say so out loud rather
+        # than silently reporting on a different day than the clock suggests.
+        wall_clock_today = datetime.now(UK).date()
+        if today != wall_clock_today:
+            log.warning(
+                "reporting on %s, not the UK wall-clock date %s "
+                "(delayed cron run or explicit --date)", today, wall_clock_today,
+            )
+            diagnostics["wall_clock_date"] = wall_clock_today.isoformat()
         entered: list[dict[str, Any]] = []
         ran: list[dict[str, Any]] = []
         by_name: dict[str, TrackedHorse] = {}
