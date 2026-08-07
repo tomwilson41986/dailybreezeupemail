@@ -3,7 +3,7 @@
 Two scheduled emails per day listing breeze-up sale graduates, plus a Friday weekly digest:
 
 - **Morning (04:00 UTC / 05:00 BST)** — `--mode morning`: entries & declarations for lots running in the next 3 days. Suppressed when empty unless `NOTIFY_ON_EMPTY=true`.
-- **Evening (21:00 UTC)** — `--mode evening`: results for lots that ran today. Always sent — quiet days get a "No Results Today" notice.
+- **Evening (21:00 UTC)** — `--mode evening`: results for lots that ran today. Always sent — quiet days get a "No Results Today" notice. "Today" is the day of the 21:00 slot, not the wall clock when the runner starts — GitHub Actions cron is best-effort and a start delayed past UK midnight would otherwise report on a day that hasn't been raced (see `_results_run_date`).
 - **Weekly (21:30 UTC Friday)** — `--mode weekly`: the week's results + the season-to-date tables, with the racing-results workbook attached (see below). Sent only to `WEEKLY_EMAIL_TO` (default tom.biggs, who gets this **instead of** the dailies — he's deliberately not in the daily recipient list).
 
 Source is Racing Post's bloodstock sale catalogue (the authoritative join between a lot and its race entry), supplemented by the live racecards index for any entries the catalogue's `entry_details` field hasn't been updated to reflect.

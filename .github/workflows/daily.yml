@@ -8,6 +8,9 @@ name: daily-breezeup-email
 #               Suppressed when empty unless notify_on_empty=true.
 #   21:00 UTC - evening run (--mode evening): results that ran today. Always
 #               sends, even on a quiet day (subject: "No Results Today").
+#               The day it reports on is anchored to this 21:00 slot, not to
+#               the wall clock when the runner starts — see the 6 Aug 2026
+#               note below and dailybreezeup.daily._results_run_date.
 #   21:30 UTC Friday - weekly run (--mode weekly): the week's results +
 #               season-to-date summary with the racing-results workbook
 #               attached, sent to the weekly-only recipients (WEEKLY_EMAIL_TO,
@@ -23,6 +26,16 @@ name: daily-breezeup-email
 # If the cron starts emitting sales_found=4 lots_total=0 again, RP has
 # tightened their rules - either bump the impersonate version or fall back
 # to a Hetzner VPS.
+#
+# 6 Aug 2026: the evening results email went out saying "No Results Today"
+# when eight graduates had actually run. GHA cron is best-effort and this
+# slot is routinely 40-60 min late; that night it was ~4 hours late and
+# started at 00:58 UTC on the 7th. The job used the wall clock, so it asked
+# RP for the 7th - a day with no racing yet - and reported nothing. The run
+# date is now derived from the scheduled slot rather than the start time, so
+# a late start reports on the right day. Nothing here needs to change if the
+# runner is slow; but if either cron time is edited, update EVENING_SLOT_UTC
+# / WEEKLY_SLOT_UTC in src/dailybreezeup/daily.py to match.
 on:
   schedule:
     - cron: "0 4 * * *"
