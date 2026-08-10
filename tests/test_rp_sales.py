@@ -148,29 +148,82 @@ def test_sale_urls_match_racing_post_shape():
 def test_fallback_sales_returns_known_2026_breezeups():
     """When the index page is blocked, the hardcoded fallback list keeps the
     pipeline running for the 2026 breeze-up sales we care about — including
-    the Tatts Guineas HIT which carries unsold-at-Craven 2yos."""
+    the Tatts Guineas sale which carries unsold-at-Craven 2yos."""
     sales = rp_sales._fallback_sales(2026)
     by_uid_date = {(s.venue_uid, s.sale_date.isoformat()): s for s in sales}
     assert (5, "2026-04-14") in by_uid_date
     assert by_uid_date[(5, "2026-04-14")].sale_name.startswith("Tattersalls Craven")
     assert (5, "2026-04-30") in by_uid_date
-    assert "Guineas Horses-in-Training" in by_uid_date[(5, "2026-04-30")].sale_name
+    assert "Tattersalls Guineas" in by_uid_date[(5, "2026-04-30")].sale_name
     assert (44, "2026-04-22") in by_uid_date
     assert (36, "2026-05-09") in by_uid_date
+    assert (47, "2026-05-13") in by_uid_date
     assert (4, "2026-05-22") in by_uid_date
+    assert (88, "2026-06-03") in by_uid_date
+    assert (3, "2026-06-27") in by_uid_date
 
 
-def test_is_hit_sale_distinguishes_guineas_hit_from_pure_breezeups():
+def test_is_hit_sale_distinguishes_guineas_from_pure_breezeups():
     craven = _craven_sale()
-    guineas = rp_sales.Sale(
+    for name in (
+        # RP's pre-sale name for the record...
+        "Tattersalls Guineas Horses-in-Training Sale 2026",
+        # ...and the name it was renamed to once past (May 2026). Both must
+        # trigger the age-2 HIT filter.
+        "Tattersalls Guineas Sale 2026",
+    ):
+        guineas = rp_sales.Sale(
+            venue_uid=5,
+            sale_date=date(2026, 4, 30),
+            sale_end_date=date(2026, 4, 30),
+            sale_name=name,
+            sale_co="Tattersalls",
+        )
+        assert rp_sales._is_hit_sale(guineas) is True
+    assert rp_sales._is_hit_sale(craven) is False
+
+
+def test_filter_breeze_ups_keeps_renamed_guineas_record():
+    """Regression: RP renamed "Tattersalls Guineas Horses-in-Training Sale
+    2026" to "Tattersalls Guineas Sale 2026" once the sale was past, which
+    dropped it from discovery (neither the breeze-up nor the old
+    Horses-in-Training pattern matched) and every Guineas graduate vanished
+    from the daily emails from May 2026 on."""
+    renamed = rp_sales.Sale(
         venue_uid=5,
         sale_date=date(2026, 4, 30),
         sale_end_date=date(2026, 4, 30),
-        sale_name="Tattersalls Guineas Horses-in-Training Sale 2026",
+        sale_name="Tattersalls Guineas Sale 2026",
         sale_co="Tattersalls",
     )
-    assert rp_sales._is_hit_sale(craven) is False
-    assert rp_sales._is_hit_sale(guineas) is True
+    assert rp_sales.filter_breeze_ups([renamed], year=2026) == [renamed]
+
+
+def test_merge_with_fallback_restores_missing_known_sale():
+    """A known sale absent from live discovery (renamed/removed index record)
+    is added back from the fallback list, keyed on (venue_uid, sale_date)."""
+    discovered = [s for s in rp_sales._fallback_sales(2026) if s.venue_uid != 5]
+    merged = rp_sales._merge_with_fallback(discovered, year=2026)
+    by_uid_date = {(s.venue_uid, s.sale_date.isoformat()) for s in merged}
+    assert (5, "2026-04-14") in by_uid_date   # Craven restored
+    assert (5, "2026-04-30") in by_uid_date   # Guineas restored
+    assert len(merged) == len(rp_sales._fallback_sales(2026))
+
+
+def test_merge_with_fallback_never_duplicates_discovered_sales():
+    """A discovered sale with a different name than its fallback entry (the
+    rename case) must not be duplicated — identity is (venue_uid, sale_date)."""
+    sales = rp_sales.parse_catalogues_index_html(_read("bloodstock_catalogues_index.html"))
+    discovered = rp_sales.filter_breeze_ups(sales, year=2026)
+    merged = rp_sales._merge_with_fallback(discovered, year=2026)
+    keys = [(s.venue_uid, s.sale_date) for s in merged]
+    assert len(keys) == len(set(keys))
+    # The fixture's Guineas record (old name) already covers the fallback's
+    # (5, 2026-04-30) entry, so it must appear exactly once, under the
+    # discovered name.
+    guineas = [s for s in merged if (s.venue_uid, s.sale_date) == (5, date(2026, 4, 30))]
+    assert len(guineas) == 1
+    assert "Horses-in-Training" in guineas[0].sale_name
 
 
 def test_fallback_sales_unknown_year_returns_empty():
