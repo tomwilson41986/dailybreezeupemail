@@ -51,14 +51,16 @@ _SALE_RECORD_RE = re.compile(
 
 # Names that should count as "breeze-up" for our purposes.
 _BREEZE_NAME = re.compile(r"breeze.?up", re.IGNORECASE)
-# Tattersalls' Guineas Horses-in-Training Sale runs the day after Craven and
-# contains the unsold/withdrawn breeze-up 2yos under Tatts' internal
-# ``cat/breezeup2/`` catalogue. The sale also contains older HIT lots which
-# are not breeze-up grads, so callers filter the fetched lots to age=2 — see
-# ``_is_hit_sale``.
-_TATTS_GUINEAS_HIT_NAME = re.compile(
-    r"tattersalls\s+guineas\b.*\bhorses[\s-]in[\s-]training", re.IGNORECASE
-)
+# Tattersalls' Guineas sale runs the day after Craven and contains the
+# unsold/withdrawn breeze-up 2yos under Tatts' internal ``cat/breezeup2/``
+# catalogue. The sale also contains older HIT lots which are not breeze-up
+# grads, so callers filter the fetched lots to age=2 — see ``_is_hit_sale``.
+# Match on "Tattersalls Guineas" alone: RP has served the record as both
+# "Tattersalls Guineas Horses-in-Training Sale" (pre-sale, 2026) and
+# "Tattersalls Guineas Sale" (renamed once past, May 2026) — anchoring on the
+# "Horses-in-Training" suffix made every graduate vanish from the emails the
+# day RP dropped it.
+_TATTS_GUINEAS_NAME = re.compile(r"tattersalls\s+guineas\b", re.IGNORECASE)
 
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -102,17 +104,24 @@ _XHR_HEADERS = {
     "X-Requested-With": "XMLHttpRequest",
 }
 
-# Hardcoded fallback for current-year breeze-up sales. Used only when the
-# /bloodstock/sales/catalogues/ index page is blocked and we can't discover
-# the list dynamically. Keep these up to date with each year's sale calendar;
-# they only need to match the URL path the data.json endpoint expects.
+# Known current-year breeze-up sales. Two jobs: the complete list when the
+# /bloodstock/sales/catalogues/ index page is blocked, and a floor under live
+# discovery — any sale here that the index scrape didn't yield is added back
+# (see ``_merge_with_fallback``), so an RP rename that stops a record matching
+# the name filters can't silently drop the sale (that's how every Guineas
+# graduate vanished from the emails in May 2026). Keep these up to date with
+# each year's sale calendar; they only need to match the URL path the
+# data.json endpoint expects.
 _BREEZE_UP_FALLBACK: dict[int, list[tuple[int, str, str, str, str]]] = {
     2026: [
-        (5,  "2026-04-14", "2026-04-15", "Tattersalls Craven Breeze Up Sale 2026",            "Tattersalls"),
-        (44, "2026-04-22", "2026-04-22", "Goffs UK 2yo Breeze Up Sale 2026",                  "Goffs UK"),
-        (5,  "2026-04-30", "2026-04-30", "Tattersalls Guineas Horses-in-Training Sale 2026",  "Tattersalls"),
-        (36, "2026-05-09", "2026-05-09", "Arqana May 2yo Breeze Up 2026",                     "Arqana"),
-        (4,  "2026-05-22", "2026-05-22", "Tattersalls Ireland Breeze Up Sale 2026",           "Tattersalls Ireland"),
+        (5,  "2026-04-14", "2026-04-15", "Tattersalls Craven Breeze Up Sale 2026",   "Tattersalls"),
+        (44, "2026-04-22", "2026-04-22", "Goffs UK 2yo Breeze Up Sale 2026",         "Goffs UK"),
+        (5,  "2026-04-30", "2026-04-30", "Tattersalls Guineas Sale 2026",            "Tattersalls"),
+        (36, "2026-05-09", "2026-05-09", "Arqana May 2yo Breeze Up 2026",            "Arqana"),
+        (47, "2026-05-13", "2026-05-13", "Osarus Breeze-Up & HIT Sale 2026",         "Osarus"),
+        (4,  "2026-05-22", "2026-05-22", "Tattersalls Ireland Breeze Up Sale 2026",  "Tattersalls Ireland"),
+        (88, "2026-06-03", "2026-06-03", "Aktem Paris Breeze-Up Sale 2026",          "Aktem"),
+        (3,  "2026-06-27", "2026-06-27", "Goffs Classic Breeze Up Sale 2026",        "Goffs"),
     ],
 }
 
@@ -206,20 +215,20 @@ def filter_breeze_ups(sales: Iterable[Sale], year: int) -> list[Sale]:
     """Keep sales worth scraping for breeze-up graduates in ``year``.
 
     Matches dedicated breeze-up sales by name, plus the Tattersalls Guineas
-    Horses-in-Training Sale (which carries the unsold-at-Craven 2yos under
-    Tatts' internal ``breezeup2`` catalogue). The Guineas HIT also contains
-    older HIT lots; ``fetch_lots`` filters those out via ``_is_hit_sale``.
+    sale (which carries the unsold-at-Craven 2yos under Tatts' internal
+    ``breezeup2`` catalogue). The Guineas sale also contains older HIT lots;
+    ``fetch_lots`` filters those out via ``_is_hit_sale``.
     """
     return [
         s for s in sales
         if s.sale_date.year == year
-        and (_BREEZE_NAME.search(s.sale_name) or _TATTS_GUINEAS_HIT_NAME.search(s.sale_name))
+        and (_BREEZE_NAME.search(s.sale_name) or _TATTS_GUINEAS_NAME.search(s.sale_name))
     ]
 
 
 def _is_hit_sale(sale: Sale) -> bool:
     """True for HIT/mixed sales where only the 2yo subset is breeze-up grads."""
-    return bool(_TATTS_GUINEAS_HIT_NAME.search(sale.sale_name))
+    return bool(_TATTS_GUINEAS_NAME.search(sale.sale_name))
 
 
 def _coerce_entry(raw: Any) -> EntryDetails | None:
@@ -347,6 +356,29 @@ def _fallback_sales(year: int) -> list[Sale]:
     return out
 
 
+def _merge_with_fallback(sales: list[Sale], year: int) -> list[Sale]:
+    """Append any known sale for ``year`` that live discovery didn't yield.
+
+    A sale is identified by ``(venue_uid, sale_date)`` — the key the data.json
+    URL is built from — so a renamed index record never duplicates its
+    fallback entry. Anything appended here means RP's landing page no longer
+    carries a record our name filters recognise for that sale (renamed or
+    removed), which is worth a warning: it's exactly how the Guineas sale
+    silently disappeared in May 2026.
+    """
+    seen = {(s.venue_uid, s.sale_date) for s in sales}
+    merged = list(sales)
+    for fb in _fallback_sales(year):
+        if (fb.venue_uid, fb.sale_date) in seen:
+            continue
+        log.warning(
+            "known sale missing from RP index discovery, adding from fallback: "
+            "%s (%s %s)", fb.sale_name, fb.sale_date.isoformat(), fb.venue_uid,
+        )
+        merged.append(fb)
+    return merged
+
+
 def _warm_up(s: requests.Session) -> None:
     """Walk a real Chrome navigation: home -> bloodstock. Each call swallows
     failures so a 503 on warm-up doesn't kill the job; the discover call
@@ -373,11 +405,15 @@ def discover_sales(
 ) -> list[Sale]:
     """Fetch the catalogues landing page and return this year's breeze-up sales.
 
-    Falls back to a hardcoded list of known sales (see ``_BREEZE_UP_FALLBACK``)
-    when the index page is blocked. Returns [] only if both paths fail.
+    The hardcoded known-sale list (``_BREEZE_UP_FALLBACK``) is merged in as a
+    floor under live discovery — a sale the index scrape missed (renamed or
+    removed record) is added back rather than silently dropped. When the index
+    page is blocked entirely, the known list is all we return. Returns [] only
+    if both paths come up empty.
     """
     s = session or _make_session()
     _warm_up(s)
+    sales: list[Sale] = []
     try:
         r = _get(
             s,
@@ -389,12 +425,11 @@ def discover_sales(
             ),
         )
         sales = filter_breeze_ups(parse_catalogues_index_html(r.text), year)
-        if sales:
-            return sales
-        log.warning("RP catalogues index returned 0 breeze-up sales for %d; using fallback", year)
+        if not sales:
+            log.warning("RP catalogues index returned 0 breeze-up sales for %d", year)
     except Exception as exc:  # noqa: BLE001
-        log.warning("RP catalogues index fetch failed (%s); using fallback", exc)
-    return _fallback_sales(year)
+        log.warning("RP catalogues index fetch failed (%s); using fallback only", exc)
+    return _merge_with_fallback(sales, year)
 
 
 def demo_lots() -> list[SaleLot]:
