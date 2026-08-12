@@ -79,6 +79,17 @@ def _fmt_card(row: dict[str, Any], *, ran: bool, show_date: bool = False) -> lis
             f"    ► {row['race_date']:%a %d %b} · {time_prefix}{row['course']}{race_suffix}"
         )
 
+    trainer = row.get("trainer")
+    jockey = row.get("jockey")
+    if trainer or jockey:
+        connections = "  ·  ".join(
+            part for part in (
+                f"T {trainer}" if trainer else "",
+                f"J {jockey}" if jockey else "",
+            ) if part
+        )
+        lines.append(f"    {connections}")
+
     if row.get("sheet_matched"):
         br = row.get("sheet_breeze_rating")
         pr = row.get("sheet_precocity_rating")

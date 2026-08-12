@@ -245,6 +245,96 @@ def test_morning_entries_ordered_by_race_time_earliest_first():
     ]
 
 
+def test_racecard_entry_carries_connections_onto_the_row():
+    """Trainer and jockey ride along from the racecard runner to the email row."""
+    today = date(2026, 4, 24)
+    rc = rp_racecards.RacecardEntry(
+        horse_uid=8688568, horse_slug="hot-havana", horse_name="Hot Havana",
+        course_uid=38, course="Newmarket", race_date=date(2026, 4, 25),
+        off_time=time(15, 10), race_name="Maiden Stakes",
+        race_url="https://www.racingpost.com/racecards/38/newmarket/2026-04-25/910567",
+        race_uid="910567", silk_url=None,
+        trainer="Karl Burke", jockey="Clifford Lee",
+    )
+
+    entered, _ran = daily._classify(
+        today, [_lot(horse_uid=8688568, entry=None)], results=[],
+        racecard_entries=[rc], entries_window_days=3,
+    )
+
+    assert entered[0]["trainer"] == "Karl Burke"
+    assert entered[0]["jockey"] == "Clifford Lee"
+
+
+def test_catalogue_side_entry_inherits_trainer_from_racecard():
+    """The catalogue's entry_details carries no connections. A lot declared
+    on any racecard in the window lends its trainer to its catalogue-side
+    entries — the trainer belongs to the horse, not to one engagement. The
+    jockey is a per-race booking and must not be carried across."""
+    today = date(2026, 4, 24)
+    entry = rp_sales.EntryDetails(
+        course_uid=40,
+        course_name="NOTTINGHAM",
+        race_date=date(2026, 4, 30),  # past the racecard window, inside the catalogue one
+        race_uid=919980,
+    )
+    lot = _lot(horse_uid=8688568, entry=entry)
+    rc = rp_racecards.RacecardEntry(
+        horse_uid=8688568, horse_slug="hot-havana", horse_name="Hot Havana",
+        course_uid=38, course="Newmarket", race_date=date(2026, 4, 25),
+        off_time=time(15, 10), race_name="Maiden Stakes",
+        race_url="https://www.racingpost.com/racecards/38/newmarket/2026-04-25/910567",
+        race_uid="910567", silk_url=None,
+        trainer="Karl Burke", jockey="Clifford Lee",
+    )
+
+    entered, _ran = daily._classify(
+        today, [lot], results=[], racecard_entries=[rc],
+        entries_window_days=3, catalogue_entries_window_days=7,
+    )
+
+    catalogue_row = next(r for r in entered if r["race_uid"] == "919980")
+    assert catalogue_row["trainer"] == "Karl Burke"
+    assert catalogue_row["jockey"] is None
+
+
+def test_catalogue_side_entry_has_no_trainer_when_lot_never_declared():
+    """No racecard sighting, no trainer — the row renders without the line
+    rather than inventing one."""
+    today = date(2026, 4, 24)
+    entry = rp_sales.EntryDetails(
+        course_uid=38, course_name="NEWMARKET",
+        race_date=date(2026, 4, 25), race_uid=910567,
+    )
+
+    entered, _ran = daily._classify(
+        today, [_lot(horse_uid=None, entry=entry)], results=[],
+        racecard_entries=[], entries_window_days=3,
+    )
+
+    assert entered[0]["trainer"] is None
+
+
+def test_result_hit_carries_connections_onto_the_row():
+    today = date(2026, 4, 24)
+    hit = rp_results.ResultHit(
+        horse_uid=1234, horse_slug="x", horse_name="Horse 1234",
+        course="Newmarket", race_date=today, off_time=time(14, 30),
+        race_name="Maiden Stakes", finishing_position="1", sp="5/1",
+        race_url="https://example/910567", race_uid="910567", silk_url=None,
+        total_runners=8, rpr=88,
+        trainer="Saeed bin Suroor", jockey="Oisin Orr",
+    )
+
+    _entered, ran = daily._classify(
+        today, [_lot(horse_uid=1234, entry=None)], results=[hit],
+        racecard_entries=[], entries_window_days=3,
+    )
+
+    assert ran[0]["trainer"] == "Saeed bin Suroor"
+    assert ran[0]["jockey"] == "Oisin Orr"
+
+
 def test_racecard_name_fallback_resolves_lot_without_uid():
     """A grad whose catalogue lot has no horse_uid still surfaces: the racecard
     runner is matched by name (the runner carries its own real uid, which isn't

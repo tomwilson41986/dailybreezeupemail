@@ -19,7 +19,9 @@ Source is Racing Post's bloodstock sale catalogue (the authoritative join betwee
    - **Evening · Ran today**: collect every `horse_uid`, fetch `/results/<today>`, walk each race page, emit one row per `/profile/horse/<uid>` link whose uid is in our set.
 4. **Render** HTML + plain-text email with inline silks (rasterised from RP's SVGs to white-backed PNGs via resvg-py) and send via Gmail SMTP. Each `(run_date, category, lot_id, race_uid)` is logged to `email_log` to dedup re-runs within the day.
 
-The catalogue JSON is authoritative for lot metadata (sire/dam, vendor, price, buyer); the racecards/results scrape is authoritative for race metadata (course, off-time, finishing position, silks). The join is by `horse_uid` wherever possible; name matching is only a guarded fallback for lots RP hasn't yet linked a uid to (so a declared runner is never missed just because its catalogue lot lags).
+Each card carries the connections as `T <trainer> · J <jockey>`, read from the racecard runner (`trainerName`/`jockeyName`) or the result row's trainer/jockey profile links. Either half is dropped when RP hasn't published it: an entry a few days out has a trainer but no jockey, because rides are booked at declaration time. The catalogue's `entry_details` carries neither, so a catalogue-side entry borrows the trainer of any racecard the same lot appeared on in the window — the trainer belongs to the horse, whereas the jockey is a per-race booking and is never carried across.
+
+The catalogue JSON is authoritative for lot metadata (sire/dam, vendor, price, buyer); the racecards/results scrape is authoritative for race metadata (course, off-time, finishing position, trainer/jockey, silks). The join is by `horse_uid` wherever possible; name matching is only a guarded fallback for lots RP hasn't yet linked a uid to (so a declared runner is never missed just because its catalogue lot lags).
 
 ## Where it runs
 

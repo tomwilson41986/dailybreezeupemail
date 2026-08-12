@@ -21,6 +21,7 @@ def connect(db_path: Path) -> sqlite3.Connection:
 def migrate(conn: sqlite3.Connection) -> None:
     schema = files("dailybreezeup").joinpath("schema.sql").read_text()
     conn.executescript(schema)
+    _add_missing_columns(conn)
     _backfill_results_archive(conn)
     # Jul 2026: the Tatts Ireland sale label changed to "Ireland" to match the
     # gSheet's "Sale" column (the old label broke the ratings join for every
@@ -31,6 +32,25 @@ def migrate(conn: sqlite3.Connection) -> None:
         " WHERE sale_short = 'Tattersalls Ireland'"
     )
     conn.commit()
+
+
+# Columns added to results_archive after the table first shipped. schema.sql
+# creates the table with them, but its CREATE TABLE IF NOT EXISTS is a no-op
+# against a database that already has the table — and CI restores the previous
+# run's database from the actions cache — so they have to be ALTERed in.
+_ARCHIVE_ADDED_COLUMNS: dict[str, str] = {
+    "trainer": "TEXT",
+    "jockey": "TEXT",
+}
+
+
+def _add_missing_columns(conn: sqlite3.Connection) -> None:
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(results_archive)")}
+    for name, decl in _ARCHIVE_ADDED_COLUMNS.items():
+        if name in existing:
+            continue
+        conn.execute(f"ALTER TABLE results_archive ADD COLUMN {name} {decl}")
+        log.info("results_archive: added column %s", name)
 
 
 def _backfill_results_archive(conn: sqlite3.Connection) -> None:
@@ -83,12 +103,12 @@ def upsert_result_row(
         INSERT INTO results_archive (
             lot_id, race_uid, horse_uid, horse_name, sale_year, sale_short,
             sale_name, lot_no, race_date, course, off_time, race_name,
-            finishing_position, total_runners, sp, rpr,
+            finishing_position, total_runners, sp, rpr, trainer, jockey,
             sheet_breeze_rating, sheet_precocity_rating, recorded_at
         ) VALUES (
             :lot_id, :race_uid, :horse_uid, :horse_name, :sale_year, :sale_short,
             :sale_name, :lot_no, :race_date, :course, :off_time, :race_name,
-            :finishing_position, :total_runners, :sp, :rpr,
+            :finishing_position, :total_runners, :sp, :rpr, :trainer, :jockey,
             :sheet_breeze_rating, :sheet_precocity_rating, :recorded_at
         )
         ON CONFLICT(lot_id, race_uid) DO UPDATE SET
@@ -105,6 +125,8 @@ def upsert_result_row(
             total_runners          = excluded.total_runners,
             sp                     = excluded.sp,
             rpr                    = COALESCE(excluded.rpr, results_archive.rpr),
+            trainer                = COALESCE(excluded.trainer, results_archive.trainer),
+            jockey                 = COALESCE(excluded.jockey, results_archive.jockey),
             sheet_breeze_rating    = COALESCE(excluded.sheet_breeze_rating, results_archive.sheet_breeze_rating),
             sheet_precocity_rating = COALESCE(excluded.sheet_precocity_rating, results_archive.sheet_precocity_rating)
         """,
@@ -125,6 +147,8 @@ def upsert_result_row(
             "total_runners": row.get("total_runners"),
             "sp": row.get("sp"),
             "rpr": row.get("rpr"),
+            "trainer": row.get("trainer"),
+            "jockey": row.get("jockey"),
             "sheet_breeze_rating": row.get("sheet_breeze_rating"),
             "sheet_precocity_rating": row.get("sheet_precocity_rating"),
             "recorded_at": recorded_at,

@@ -100,6 +100,12 @@ class RacecardEntry:
     race_url: str
     race_uid: str
     silk_url: str | None
+    # Connections default to None: RP publishes a trainer with the entry, but
+    # the ride is only booked at declaration time, so an entry a few days out
+    # genuinely has no jockey. (The default also keeps this shared dataclass
+    # constructible from barriertrials, which doesn't render connections.)
+    trainer: str | None = None
+    jockey: str | None = None
 
 
 def _course_display(slug: str) -> str:
@@ -140,6 +146,18 @@ def _parse_start_time(s: str | None) -> time | None:
 def _slug_from_url(url: str | None) -> str:
     m = _PROFILE_RE.search(url or "")
     return m.group(2) if m else ""
+
+
+def _clean_person(name: Any) -> str | None:
+    """Tidy a trainer/jockey name from the racecard JSON, or None when absent.
+
+    Entries published before declarations carry a trainer but no jockey (the
+    booking isn't made until ~48h out), and RP writes that as "" rather than
+    omitting the key — so blank has to collapse to None for the email to leave
+    the slot out rather than print an empty label."""
+    if not isinstance(name, str):
+        return None
+    return " ".join(name.split()) or None
 
 
 def parse_racecards_index_race_urls(
@@ -249,6 +267,8 @@ def parse_racecard_page_entries(
                 race_url=race_url,
                 race_uid=race_uid,
                 silk_url=(runner.get("silkImage") or None),
+                trainer=_clean_person(runner.get("trainerName")),
+                jockey=_clean_person(runner.get("jockeyName")),
             )
         )
     return hits, off_time

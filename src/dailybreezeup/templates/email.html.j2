@@ -184,7 +184,19 @@
             </div>
           </td>
         </tr>
-        {#- ─ row 3: stats line ─ -#}
+        {#- ─ row 3: connections line ─ -#}
+        {%- if row.trainer or row.jockey %}
+        <tr>
+          <td colspan="{{ ncols }}" style="padding:6px 16px 0;">
+            <div style="font-size:12px;color:#666;">
+              {%- if row.trainer %}<span style="color:#444;font-weight:600;">T</span> {{ row.trainer }}{% endif -%}
+              {%- if row.trainer and row.jockey %}<span style="color:#ccc;margin:0 8px;">·</span>{% endif -%}
+              {%- if row.jockey %}<span style="color:#444;font-weight:600;">J</span> {{ row.jockey }}{% endif %}
+            </div>
+          </td>
+        </tr>
+        {%- endif %}
+        {#- ─ row 4: stats line ─ -#}
         {%- if row.sheet_matched and (row.sheet_ot_rank is not none or row.sheet_sl_1f is not none or row.sheet_sl_go is not none) %}
         <tr>
           <td colspan="{{ ncols }}" style="padding:8px 16px 0;">
@@ -204,7 +216,7 @@
           </td>
         </tr>
         {%- endif %}
-        {#- ─ row 4: commercial line ─ -#}
+        {#- ─ row 5: commercial line ─ -#}
         <tr>
           <td colspan="{{ ncols }}" style="padding:6px 16px 14px;">
             <div style="font-size:12px;color:#666;">

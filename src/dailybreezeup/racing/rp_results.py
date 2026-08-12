@@ -74,6 +74,10 @@ class ResultHit:
     silk_url: str | None
     total_runners: int | None
     rpr: int | None
+    # Optional for the same reason as rpr: a row RP renders without linked
+    # connections still yields a usable result.
+    trainer: str | None = None
+    jockey: str | None = None
 
 
 def _course_display(slug: str) -> str:
@@ -90,6 +94,22 @@ def _parse_off_time(title: str) -> time | None:
     if 1 <= hh <= 10:
         hh += 12
     return time(hh, mm)
+
+
+def _person(row: lxml_html.HtmlElement, kind: str) -> str | None:
+    """First trainer/jockey name linked from a result row, or None.
+
+    RP renders each runner's connections twice per row (a wide-screen cell and
+    a narrow-screen one stacked under the horse), so we take the first anchor
+    and ignore the duplicate. The name is read from the anchor text rather than
+    the surrounding wrapper because a claiming jockey's allowance sits in a
+    sibling ``<sup>`` — "Conor Whiteley" reads better than "Conor Whiteley 3".
+    """
+    for a in row.xpath(f'.//a[contains(@href,"/profile/{kind}/")]'):
+        name = " ".join(a.text_content().split())
+        if name:
+            return name
+    return None
 
 
 def _parse_rating(s: str) -> int | None:
@@ -194,6 +214,8 @@ def parse_result_page_hits(
                 silk_url=silk_url,
                 total_runners=total_runners,
                 rpr=rpr,
+                trainer=_person(row, "trainer"),
+                jockey=_person(row, "jockey"),
             )
         )
     return hits
