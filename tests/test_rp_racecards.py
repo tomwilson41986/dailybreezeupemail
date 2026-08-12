@@ -101,6 +101,21 @@ def test_parse_racecard_page_entries_matches_target_uid():
     assert off_time == time(19, 12)
 
 
+def test_parse_racecard_page_entries_reads_connections():
+    """trainerName / jockeyName come straight off the runner JSON."""
+    hits, _ = _entries({9312938})
+    assert hits[0].trainer == "Karl Burke"
+    assert hits[0].jockey == "Clifford Lee"
+
+
+def test_parse_racecard_page_entries_blank_jockey_is_none():
+    """An entry with no jockey booked yet (RP writes "") must come back as
+    None so the email leaves the slot out instead of printing a bare label."""
+    hits, _ = _entries({8000001})
+    assert hits[0].trainer == "George Boughey"
+    assert hits[0].jockey is None
+
+
 def test_parse_racecard_page_entries_skips_non_runners():
     """A uid we want (Glamorize, 9312940) that is flagged nonRunner must not be
     emitted — declared-then-withdrawn horses aren't running today."""

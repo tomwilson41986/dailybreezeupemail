@@ -78,6 +78,22 @@ def test_parse_result_page_hits_matches_uid_in_target_set():
     assert h.rpr is None
 
 
+def test_parse_result_page_hits_reads_connections():
+    """Trainer and jockey come off the row's profile links. RP renders each
+    twice (wide + narrow layouts) and puts a claiming jockey's allowance in a
+    sibling <sup>, so the name must come back once and unadorned."""
+    hits = rp_results.parse_result_page_hits(
+        _read("results_race.html"),
+        race_url="https://www.racingpost.com/results/6/beverley/2026-04-23/916393",
+        race_uid="916393",
+        course="Beverley",
+        race_date=date(2026, 4, 23),
+        target_uids={9129803},
+    )
+    assert hits[0].trainer == "Saeed bin Suroor"
+    assert hits[0].jockey == "Oisin Orr"
+
+
 @pytest.mark.parametrize(
     "s,expected",
     [

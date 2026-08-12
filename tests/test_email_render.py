@@ -380,6 +380,57 @@ def test_weekly_quiet_week_shows_placeholder():
     assert "No Runners" in p.subject
 
 
+def test_entries_card_shows_trainer_and_jockey():
+    p = render(
+        run_date=date(2026, 4, 24),
+        entered=[_entered_row(trainer="Karl Burke", jockey="Clifford Lee")],
+        ran_today=[],
+        mode="morning",
+    )
+    assert "Karl Burke" in p.html
+    assert "Clifford Lee" in p.html
+    assert "T Karl Burke  ·  J Clifford Lee" in p.text
+
+
+def test_results_card_shows_trainer_and_jockey():
+    p = render(
+        run_date=date(2026, 4, 24),
+        entered=[],
+        ran_today=[_ran_row(horse_name="Named Runner",
+                            trainer="Saeed bin Suroor", jockey="Oisin Orr")],
+        mode="evening",
+    )
+    assert "Saeed bin Suroor" in p.html
+    assert "Oisin Orr" in p.html
+    assert "T Saeed bin Suroor  ·  J Oisin Orr" in p.text
+
+
+def test_card_shows_trainer_alone_when_jockey_not_yet_booked():
+    """Entries a few days out have a trainer but no jockey — the card must
+    show the trainer without a dangling separator or an empty J label."""
+    p = render(
+        run_date=date(2026, 4, 24),
+        entered=[_entered_row(trainer="Karl Burke")],
+        ran_today=[],
+        mode="morning",
+    )
+    assert "T</span> Karl Burke" in p.html
+    assert ">J</span>" not in p.html
+    assert "T Karl Burke\n" in p.text
+    assert "J " not in p.text
+
+
+def test_card_omits_connections_line_when_neither_known():
+    p = render(
+        run_date=date(2026, 4, 24),
+        entered=[_entered_row()],
+        ran_today=[],
+        mode="morning",
+    )
+    assert ">T</span>" not in p.html
+    assert ">J</span>" not in p.html
+
+
 def test_evening_card_shows_rpr_when_present():
     p = render(
         run_date=date(2026, 4, 24),

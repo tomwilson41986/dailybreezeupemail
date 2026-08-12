@@ -120,6 +120,69 @@ def test_upsert_skips_rows_missing_required_keys(tmp_path: Path):
         assert conn.execute("SELECT COUNT(*) FROM results_archive").fetchone()[0] == 0
 
 
+def test_upsert_round_trips_connections_without_clobbering(tmp_path: Path):
+    """Trainer/jockey persist so the weekly summary can show them, and a later
+    sparse scrape (RP row rendered without linked connections) keeps what we
+    already stored rather than blanking it."""
+    db_path = tmp_path / "test.db"
+    with db.session(db_path) as conn:
+        db.upsert_result_row(conn, _payload(trainer="Saeed bin Suroor", jockey="Oisin Orr"))
+        row = conn.execute("SELECT trainer, jockey FROM results_archive").fetchone()
+        assert (row["trainer"], row["jockey"]) == ("Saeed bin Suroor", "Oisin Orr")
+
+        db.upsert_result_row(conn, _payload(rpr=88))  # no connections this time
+        row = conn.execute("SELECT trainer, jockey FROM results_archive").fetchone()
+        assert (row["trainer"], row["jockey"]) == ("Saeed bin Suroor", "Oisin Orr")
+
+
+def test_migrate_adds_connection_columns_to_an_existing_archive(tmp_path: Path):
+    """schema.sql's CREATE TABLE IF NOT EXISTS is a no-op against the database
+    CI restores from its cache, so columns added after the table shipped have to
+    be ALTERed in. Build the pre-connections table by hand and assert migrate()
+    catches up."""
+    db_path = tmp_path / "old.sqlite"
+    conn = db.connect(db_path)
+    conn.execute(  # the shipped schema as it stood before trainer/jockey
+        """
+        CREATE TABLE results_archive (
+            lot_id                  TEXT NOT NULL,
+            race_uid                TEXT NOT NULL,
+            horse_uid               INTEGER,
+            horse_name              TEXT,
+            sale_year               INTEGER NOT NULL,
+            sale_short              TEXT,
+            sale_name               TEXT,
+            lot_no                  INTEGER,
+            race_date               TEXT NOT NULL,
+            course                  TEXT,
+            off_time                TEXT,
+            race_name               TEXT,
+            finishing_position      TEXT,
+            total_runners           INTEGER,
+            sp                      TEXT,
+            rpr                     INTEGER,
+            sheet_breeze_rating     REAL,
+            sheet_precocity_rating  REAL,
+            recorded_at             TEXT NOT NULL,
+            PRIMARY KEY (lot_id, race_uid)
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    with db.session(db_path) as conn:
+        columns = {r[1] for r in conn.execute("PRAGMA table_info(results_archive)")}
+        assert {"trainer", "jockey"} <= columns
+        # And the migrated table takes writes through the normal path.
+        assert db.upsert_result_row(conn, _payload(trainer="Karl Burke", jockey="Clifford Lee"))
+
+    # Re-opening is a no-op rather than an error (ALTER TABLE isn't idempotent).
+    with db.session(db_path) as conn:
+        row = conn.execute("SELECT trainer, jockey FROM results_archive").fetchone()
+        assert (row["trainer"], row["jockey"]) == ("Karl Burke", "Clifford Lee")
+
+
 def test_migrate_normalises_old_tatts_ireland_sale_label(tmp_path: Path):
     """Rows archived before Jul 2026 carry sale_short='Tattersalls Ireland';
     the label changed to 'Ireland' to match the gSheet, and migrate() rewrites

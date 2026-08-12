@@ -96,6 +96,7 @@ def _entered_row(
     lot: rp_sales.SaleLot,
     *,
     race_off_times: dict[str, time] | None = None,
+    trainers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     entry = lot.entry
     assert entry is not None
@@ -110,6 +111,12 @@ def _entered_row(
         "course": entry.course_name.title(),
         "race_date": entry.race_date,
         "off_time": off_time,
+        # Nor does it carry the connections. The trainer is a property of the
+        # horse rather than of one engagement, so a lot seen on any racecard in
+        # the window lends its trainer to its catalogue-side entries too. The
+        # jockey is a per-race booking and is never carried across.
+        "trainer": (trainers or {}).get(lot.lot_id),
+        "jockey": None,
         "race_url": (
             f"https://www.racingpost.com/racecards/{entry.course_uid}/"
             f"{entry.course_name.lower().replace(' ', '-')}/"
@@ -133,6 +140,8 @@ def _ran_row(lot: rp_sales.SaleLot, hit: rp_results.ResultHit) -> dict[str, Any]
         "race_url": hit.race_url,
         "horse_name": hit.horse_name or lot.horse_name,
         "silk_url": hit.silk_url,
+        "trainer": hit.trainer,
+        "jockey": hit.jockey,
     })
     return base
 
@@ -149,6 +158,8 @@ def _entered_row_from_racecard(
         "race_url": entry.race_url,
         "horse_name": entry.horse_name or lot.horse_name,
         "silk_url": entry.silk_url,
+        "trainer": entry.trainer,
+        "jockey": entry.jockey,
     })
     return base
 
@@ -187,6 +198,10 @@ def _classify(
 
     entered: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
+    # lot_id -> trainer, learned from the racecards. Lets a catalogue-side
+    # entry show its trainer when the same lot was declared elsewhere in the
+    # window (see _entered_row).
+    trainers: dict[str, str] = {}
 
     def _push(row: dict[str, Any]) -> None:
         key = (row["lot_id"], row.get("race_uid") or "")
@@ -201,12 +216,14 @@ def _classify(
     # later) race or is missing. Catalogue-derived rows below act as a
     # fallback for lots not seen via racecards.
     for rc in racecard_entries or []:
-        if not (today <= rc.race_date <= window_end):
-            continue
         lot = by_uid.get(rc.horse_uid) if rc.horse_uid is not None else None
         if lot is None and rc.horse_name:
             lot = by_name.get(rp_racecards.normalize_name(rc.horse_name))
         if lot is None:
+            continue
+        if rc.trainer:
+            trainers.setdefault(lot.lot_id, rc.trainer)
+        if not (today <= rc.race_date <= window_end):
             continue
         _push(_entered_row_from_racecard(lot, rc))
 
@@ -215,7 +232,7 @@ def _classify(
             continue
         if not (today <= lot.entry.race_date <= catalogue_window_end):
             continue
-        _push(_entered_row(lot, race_off_times=race_off_times))
+        _push(_entered_row(lot, race_off_times=race_off_times, trainers=trainers))
 
     ran: list[dict[str, Any]] = []
     for hit in results:

@@ -62,6 +62,8 @@ def _archive_row(race_date: str) -> dict:
         "total_runners": 8,
         "sp": "11/4",
         "rpr": 89,
+        "trainer": "Karl Burke",
+        "jockey": "Clifford Lee",
     }
 
 
@@ -110,6 +112,8 @@ def test_run_weekly_renders_week_from_archive(monkeypatch, tmp_path):
     assert "Efsixteen" in text
     assert "Tue 07 Jul" in text
     assert "RPR 89" in text
+    # Connections survive the archive round-trip into the weekly card.
+    assert "T Karl Burke  ·  J Clifford Lee" in text
     assert "workbook attached" in text
     # season summary covers the archive, not just the week
     assert "SEASON TO DATE" in Path("data/last_preview.txt").read_text(encoding="utf-8")

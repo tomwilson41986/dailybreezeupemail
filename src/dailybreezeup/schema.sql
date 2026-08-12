@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS run_log (
 --
 -- rpr is nullable: backfilled rows predate RPR scraping, and some runners
 -- (non-finishers) have no RPR even in fresh scrapes. Aggregations skip
--- nulls when averaging.
+-- nulls when averaging. trainer/jockey are nullable for the same reason —
+-- rows archived before connections were scraped carry neither, and the
+-- weekly email simply omits the line for them.
 CREATE TABLE IF NOT EXISTS results_archive (
     lot_id                  TEXT NOT NULL,
     race_uid                TEXT NOT NULL,
@@ -50,6 +52,8 @@ CREATE TABLE IF NOT EXISTS results_archive (
     total_runners           INTEGER,
     sp                      TEXT,
     rpr                     INTEGER,
+    trainer                 TEXT,
+    jockey                  TEXT,
     sheet_breeze_rating     REAL,
     sheet_precocity_rating  REAL,
     recorded_at             TEXT NOT NULL,
