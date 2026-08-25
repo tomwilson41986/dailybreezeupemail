@@ -2,24 +2,34 @@
 
 Given a set of ``horse_uid`` values, fetch today's results index from
 Racing Post, walk each race page, and emit one :class:`ResultHit` per
-matched runner.  No name-based matching: we join on the uid embedded in
-the profile/horse/<uid> anchor, which is authoritative.
+matched runner.  No name-based matching: we join on RP's own ``horseUid``,
+which is authoritative.
+
+RP serves result pages as a Next.js app: the runner and race data live in the
+embedded ``__NEXT_DATA__`` JSON blob, **not** in HTML attributes. (RP migrated
+/results away from the old ``rp-horseTable__mainRow`` markup this module used
+to scrape — August 2026 — exactly as it had already migrated /racecards. The
+old selectors matched nothing, so every race page yielded zero hits and the
+evening email reported "No Results Today" every single day while the season
+quietly went on around it. See ``_extract_result_data``: when the payload is
+missing we now say so loudly rather than returning an empty list, because a
+silent zero is indistinguishable from a genuinely quiet day.)
 
 The parsers are pure so tests can drive them against captured fixtures.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import time as wall
 from dataclasses import dataclass
-from datetime import date, time
-from typing import Iterable, Sequence
+from datetime import date, datetime, time
+from typing import Any, Iterable
 
 import requests
-from lxml import html as lxml_html
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wait_exponential
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +65,26 @@ _DOC_HEADERS = {
 _RESULT_PATH_RE = re.compile(r"/results/\d+/([a-z][a-z0-9-]*)/(\d{4}-\d{2}-\d{2})/(\d+)")
 _PROFILE_RE = re.compile(r"/profile/horse/(\d+)/([a-z0-9-]+)")
 _TIME_RE = re.compile(r"(\d{1,2})[:.](\d{2})")
-_RAN_RE = re.compile(r"(\d+)\s+ran\b", re.IGNORECASE)
+_NEXT_DATA_RE = re.compile(
+    r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', re.S
+)
+
+
+class ResultPayloadMissing(Exception):
+    """A result page carried no readable ``raceResult`` payload.
+
+    Raised rather than returning ``[]`` so an RP markup change can't masquerade
+    as a day on which none of our horses ran.
+    """
+
+
+class RacePageGone(Exception):
+    """RP's results index linked a race page that RP itself 404s.
+
+    Its own index routinely carries a handful of these (abandoned or
+    re-scheduled races). Permanent, so there is nothing to retry and nothing
+    to alarm about.
+    """
 
 
 @dataclass(frozen=True)
@@ -96,29 +125,62 @@ def _parse_off_time(title: str) -> time | None:
     return time(hh, mm)
 
 
-def _person(row: lxml_html.HtmlElement, kind: str) -> str | None:
-    """First trainer/jockey name linked from a result row, or None.
+def _extract_result_data(html_text: str) -> dict[str, Any] | None:
+    """Pull ``raceResult.data`` out of the page's ``__NEXT_DATA__`` JSON."""
+    m = _NEXT_DATA_RE.search(html_text)
+    if not m:
+        return None
+    try:
+        data = json.loads(m.group(1))
+    except ValueError:
+        return None
+    try:
+        race_data = data["props"]["pageProps"]["initialState"]["raceResult"]["data"]
+    except (KeyError, TypeError):
+        return None
+    return race_data if isinstance(race_data, dict) else None
 
-    RP renders each runner's connections twice per row (a wide-screen cell and
-    a narrow-screen one stacked under the horse), so we take the first anchor
-    and ignore the duplicate. The name is read from the anchor text rather than
-    the surrounding wrapper because a claiming jockey's allowance sits in a
-    sibling ``<sup>`` — "Conor Whiteley" reads better than "Conor Whiteley 3".
+
+def _payload_off_time(payload: dict[str, Any]) -> time | None:
+    """Off time in UK clock terms, which is what the email shows.
+
+    ``raceDatetime`` is already expressed in UK time even for a foreign
+    fixture (``localRaceDatetime`` carries the course's own clock — Deauville's
+    14:18 CEST is the 1:18 the UK reader is looking for). Fall back to the
+    header's display time, which needs the same 12-hour fixup as a page title.
     """
-    for a in row.xpath(f'.//a[contains(@href,"/profile/{kind}/")]'):
-        name = " ".join(a.text_content().split())
-        if name:
-            return name
+    iso = payload.get("raceDatetime")
+    if isinstance(iso, str):
+        try:
+            return datetime.fromisoformat(iso).time().replace(second=0, microsecond=0)
+        except ValueError:
+            pass
+    header = payload.get("header")
+    if isinstance(header, dict):
+        return _parse_off_time(header.get("raceTime") or "")
     return None
 
 
-def _parse_rating(s: str) -> int | None:
-    """Pull an integer rating out of a rating-column cell.
+def _text(value: Any) -> str | None:
+    """Collapse a JSON string field to a clean value, or None when blank."""
+    if not isinstance(value, str):
+        return None
+    cleaned = " ".join(value.split())
+    return cleaned or None
 
-    RP renders ratings as either a digit string or an en-dash entity
-    (&#8211;) / em-dash for missing values; sometimes there's leading
-    whitespace from the surrounding markup."""
-    digits = "".join(ch for ch in (s or "") if ch.isdigit())
+
+def _slug_from_url(url: Any) -> str:
+    m = _PROFILE_RE.search(url) if isinstance(url, str) else None
+    return m.group(2) if m else ""
+
+
+def _parse_rating(s: Any) -> int | None:
+    """Pull an integer rating out of RP's rating field.
+
+    RP publishes a rating as a digit string, or an en/em-dash placeholder when
+    it hasn't rated the race yet (routine for a 2yo maiden on the evening it
+    runs); either dash means "no rating", not zero."""
+    digits = "".join(ch for ch in str(s or "") if ch.isdigit())
     return int(digits) if digits else None
 
 
@@ -146,76 +208,68 @@ def parse_result_page_hits(
     race_date: date,
     target_uids: set[int],
 ) -> list[ResultHit]:
-    """Scan a race page for profile/horse/<uid> where uid is in ``target_uids``."""
+    """Emit a :class:`ResultHit` for every runner whose uid is in ``target_uids``.
+
+    Raises :class:`ResultPayloadMissing` when the page carries no readable
+    ``raceResult`` payload, so a markup change surfaces as a loud failure
+    instead of a day that merely looks quiet.
+    """
     if not target_uids:
         return []
-    doc = lxml_html.fromstring(html_text)
-    title_nodes = doc.xpath("//title/text()")
-    off_time = _parse_off_time(title_nodes[0]) if title_nodes else None
-    race_name_nodes = doc.xpath(
-        '//*[contains(@class,"rp-raceTimeCourseName__title")]//text()'
-    )
-    race_name = " ".join("".join(race_name_nodes).split()) if race_name_nodes else ""
+    payload = _extract_result_data(html_text)
+    if payload is None:
+        raise ResultPayloadMissing(
+            f"no __NEXT_DATA__ raceResult payload on {race_url} "
+            "— has RP changed the page shape again?"
+        )
 
-    # "X ran" is published in the post-race info strip; fall back to the row
-    # count if the markup ever changes shape.
-    total_runners: int | None = None
-    for txt in doc.xpath(
-        '//*[contains(@class,"rp-raceInfo__value_black")]//text()'
-    ):
-        m = _RAN_RE.search(txt)
-        if m:
-            total_runners = int(m.group(1))
-            break
-    main_rows = doc.xpath('//tr[contains(@class,"rp-horseTable__mainRow")]')
-    if total_runners is None and main_rows:
-        total_runners = len(main_rows)
+    header = payload.get("header") if isinstance(payload.get("header"), dict) else {}
+    details = payload.get("details") if isinstance(payload.get("details"), dict) else {}
+
+    off_time = _payload_off_time(payload)
+    race_name = _text(header.get("raceTitle")) or ""
+    # RP's own course name beats one reconstructed from the URL slug:
+    # "Lingfield (AW)" rather than "Lingfield Aw".
+    course_name = _text(payload.get("courseName")) or course
+
+    runners = payload.get("runners")
+    runners = runners if isinstance(runners, list) else []
+    total_runners = details.get("numberOfRunners")
+    if not isinstance(total_runners, int):
+        total_runners = len(runners) or None
 
     hits: list[ResultHit] = []
-    for row in main_rows:
-        anchors = row.xpath('.//a[contains(@href,"/profile/horse/")]/@href')
-        uid_match: tuple[int, str] | None = None
-        for href in anchors:
-            m = _PROFILE_RE.search(href)
-            if not m:
-                continue
-            uid = int(m.group(1))
-            if uid in target_uids:
-                uid_match = (uid, m.group(2))
-                break
-        if uid_match is None:
+    for runner in runners:
+        if not isinstance(runner, dict):
+            continue
+        uid = runner.get("horseUid")
+        if not isinstance(uid, int) or uid not in target_uids:
             continue
 
-        uid, slug = uid_match
-        horse_el = row.xpath('.//*[contains(@class,"rp-horseTable__horse__name")]')
-        horse_name = " ".join(horse_el[0].text_content().split()) if horse_el else ""
-        pos_el = row.xpath('.//*[contains(@class,"rp-horseTable__pos__number")]/text()')
-        pos = pos_el[0].strip().split()[0] if pos_el and pos_el[0].strip() else None
-        sp_el = row.xpath('.//*[contains(@class,"rp-horseTable__horse__price")]/text()')
-        sp = " ".join("".join(sp_el).split()) or None
-        silk_src = row.xpath('.//img[contains(@class,"rp-horseTable__silk")]/@src')
-        silk_url = silk_src[0] if silk_src else None
-        rpr_text = "".join(row.xpath('.//td[@data-ending="RPR"]//text()'))
-        rpr = _parse_rating(rpr_text)
+        # A disqualified runner keeps its finishing code in the feed, but it
+        # did not win anything — the stats count "1" as a win, so say DSQ.
+        pos = _text(runner.get("outcomeCode"))
+        if runner.get("isDisqualified"):
+            pos = "DSQ"
 
         hits.append(
             ResultHit(
                 horse_uid=uid,
-                horse_slug=slug,
-                horse_name=horse_name,
-                course=course,
+                horse_slug=_slug_from_url(runner.get("horseUrl")),
+                horse_name=_text(runner.get("horseName")) or "",
+                course=course_name,
                 race_date=race_date,
                 off_time=off_time,
                 race_name=race_name,
                 finishing_position=pos,
-                sp=sp,
+                sp=_text(runner.get("odds")),
                 race_url=race_url,
                 race_uid=race_uid,
-                silk_url=silk_url,
+                silk_url=_text(runner.get("silkUrl")),
                 total_runners=total_runners,
-                rpr=rpr,
-                trainer=_person(row, "trainer"),
-                jockey=_person(row, "jockey"),
+                rpr=_parse_rating(runner.get("rpRating")),
+                trainer=_text(runner.get("trainerName")),
+                jockey=_text(runner.get("jockeyName")),
             )
         )
     return hits
@@ -238,9 +292,17 @@ def _make_session():
     return s
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
+@retry(
+    retry=retry_if_not_exception_type(RacePageGone),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=8),
+)
 def _fetch(session: requests.Session, url: str) -> str:
     r = session.get(url, timeout=30)
+    # A 404 is RP's final answer; retrying one three times with backoff just
+    # spends a minute of the run on the stale links its own index publishes.
+    if r.status_code == 404:
+        raise RacePageGone(url)
     r.raise_for_status()
     return r.text
 
@@ -269,12 +331,18 @@ def fetch_hits_for_uids(
         return []
 
     hits: list[ResultHit] = []
+    read = gone = failed = 0
     for i, (slug, race_uid, url) in enumerate(races):
         if i:
             wall.sleep(sleep)
         try:
             page = _fetch(s, url)
+        except RacePageGone:
+            gone += 1
+            log.info("RP result page no longer published, skipping (%s)", url)
+            continue
         except Exception as exc:  # noqa: BLE001
+            failed += 1
             log.warning("RP result page fetch failed (%s): %s", url, exc)
             continue
         try:
@@ -288,6 +356,26 @@ def fetch_hits_for_uids(
                     target_uids=uids,
                 )
             )
+            read += 1
         except Exception as exc:  # noqa: BLE001
+            failed += 1
             log.warning("RP result page parse failed (%s): %s", url, exc)
+
+    log.info(
+        "RP results %s: read %d/%d race pages (%d unreadable, %d no longer published)",
+        on, read, len(races), failed, gone,
+    )
+    # Zero hits off a full read is a quiet day; zero hits because we couldn't
+    # read the card is a broken scrape wearing a quiet day's clothes. The
+    # caller can't tell them apart from the hit count, so shout here.
+    if failed and not read:
+        log.error(
+            "RP results %s: every one of the %d readable race pages failed — "
+            "treat today's result count as unknown, not zero", on, failed,
+        )
+    elif failed:
+        log.warning(
+            "RP results %s: %d of %d race pages unreadable; any grad that ran "
+            "in them is missing from today's email", on, failed, len(races),
+        )
     return hits
