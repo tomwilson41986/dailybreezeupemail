@@ -1,0 +1,132 @@
+name: wathnan-runners-report
+
+# Emails the Wathnan Racing runners and entries PDF at 08:00 UK, every day.
+#
+# GitHub's scheduler is UTC-only, and 08:00 in London is 07:00 UTC during BST
+# and 08:00 UTC during GMT. Both slots are booked and the job keeps whichever
+# one is 08:00 locally today, stopping the other before it installs anything.
+#
+# The decision is made from `github.event.schedule` -- which cron fired -- and
+# never from the wall clock. GHA cron is best-effort and this repo has already
+# been bitten by it once (see the 6 Aug 2026 note in daily.yml: a slot that ran
+# ~4 hours late reported on the wrong day). A run that asked "is it 08:00 now?"
+# would answer no and silently send nothing on exactly the mornings it started
+# late. Asking "am I the slot that is 08:00 in London today?" does not care.
+on:
+  schedule:
+    - cron: "0 7 * * *"   # 08:00 London while BST is in force
+    - cron: "0 8 * * *"   # 08:00 London while GMT is in force
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Treat this YYYY-MM-DD as today (default: today UK)"
+        required: false
+      days_ahead:
+        description: "Days of entries after tomorrow. Blank = repo default (5)."
+        required: false
+      email:
+        description: "Send the email. Off by default so manual runs don't surprise anyone."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TZ: Europe/London
+      GMAIL_USER:         ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      EMAIL_FROM:         ${{ secrets.EMAIL_FROM }}
+      # This report goes to the Wathnan team, NOT the breeze-up distribution
+      # list. `secrets.EMAIL_TO` is deliberately not passed through: the code's
+      # fallback chain would otherwise reach it whenever the variable below is
+      # unset, and quietly mail the Wathnan report to the breeze-up recipients.
+      WATHNAN_EMAIL_TO: >-
+        ${{ vars.WATHNAN_EMAIL_TO || 'racingsquared@gmail.com,sophie@wathnan-racing.com' }}
+      # Racing Post rejects Python's TLS fingerprint from cloud IPs; curl_cffi
+      # impersonates Chrome instead. Bump this if RP tightens again.
+      RP_IMPERSONATE:     ${{ vars.RP_IMPERSONATE || 'chrome124' }}
+      DAYS_AHEAD: >-
+        ${{ github.event.inputs.days_ahead || vars.WATHNAN_DAYS_AHEAD || '5' }}
+
+    steps:
+      - name: Is this the 08:00 UK slot?
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "due=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          slot="${{ github.event.schedule }}"
+          offset=$(date +%z)   # TZ is Europe/London: +0100 in BST, +0000 in GMT
+          if { [ "$offset" = "+0100" ] && [ "$slot" = "0 7 * * *" ]; } || \
+             { [ "$offset" = "+0000" ] && [ "$slot" = "0 8 * * *" ]; }; then
+            echo "due=true" >> "$GITHUB_OUTPUT"
+            echo "Slot '$slot' is 08:00 in London today (UTC$offset)."
+          else
+            echo "due=false" >> "$GITHUB_OUTPUT"
+            echo "Slot '$slot' is not 08:00 in London today (UTC$offset); the other cron covers it."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.due == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.due == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        if: steps.gate.outputs.due == 'true'
+        run: pip install -e .
+
+      - name: Build and send the report
+        if: steps.gate.outputs.due == 'true'
+        run: |
+          args="--days-ahead ${DAYS_AHEAD} --no-browser --verbose"
+          if [ "${{ github.event_name }}" = "schedule" ] || \
+             [ "${{ github.event.inputs.email }}" = "true" ]; then
+            args="$args --email"
+          fi
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            args="$args --date ${{ github.event.inputs.date }}"
+          fi
+          wathnan-daily $args | tee summary.txt
+
+      - name: Job summary
+        if: always() && steps.gate.outputs.due == 'true'
+        run: |
+          {
+            echo "## Wathnan runners report"
+            echo
+            echo '```'
+            cat summary.txt 2>/dev/null || echo "the run produced no summary"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the report
+        if: always() && steps.gate.outputs.due == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wathnan-runners-${{ github.run_id }}
+          path: |
+            output/*.pdf
+            summary.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      # The exact pages a failed run saw, so a parser break can be diagnosed
+      # without waiting for it to happen again.
+      - name: Upload the fetched pages
+        if: failure() && steps.gate.outputs.due == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wathnan-snapshots-${{ github.run_id }}
+          path: snapshots/
+          if-no-files-found: ignore
+          retention-days: 7

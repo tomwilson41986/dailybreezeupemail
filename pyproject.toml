@@ -16,6 +16,10 @@ dependencies = [
   # cssselect powers lxml's .cssselect() used by the salescatalogues scrapers.
   "cssselect>=1.2",
   "jinja2>=3.1",
+  # BeautifulSoup parses the France Galop / Deutscher Galopp / irishracing
+  # pages; reportlab draws the Wathnan runners PDF.
+  "beautifulsoup4>=4.12",
+  "reportlab>=4.0",
   "pydantic>=2.7",
   "pydantic-settings>=2.3",
   "tenacity>=8.4",
@@ -29,6 +33,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=8.2",
+  # pdfplumber reads the generated PDF back to assert its layout.
+  "pdfplumber>=0.11",
   "ruff>=0.5",
   "mypy>=1.10",
 ]
@@ -41,6 +47,7 @@ xlsx = [
 breezeup-daily = "dailybreezeup.daily:main"
 barriertrials-daily = "barriertrials.daily:main"
 salescatalogues-daily = "salescatalogues.daily:main"
+wathnan-daily = "wathnan.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -49,6 +56,9 @@ where = ["src"]
 dailybreezeup = ["schema.sql", "templates/*.j2"]
 barriertrials = ["schema.sql", "templates/*.j2"]
 salescatalogues = ["schema.sql", "templates/*.j2"]
+# The runners PDF ships its own fonts and brand marks, plus the canonical
+# name / country / roster registries it reconciles feeds against.
+wathnan = ["assets/*.png", "assets/fonts/*.ttf", "data/*.json"]
 
 [tool.ruff]
 line-length = 100
