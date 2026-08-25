@@ -181,7 +181,7 @@ emptying the digest.
 ## Wathnan runners report (`wathnan-daily`)
 
 A third digest, unrelated to the breeze-up cohort: the daily **TOMORROW'S
-RUNNERS / UPDATED ENTRIES** PDF for Wathnan Racing, emailed at 07:00 UK.
+RUNNERS / UPDATED ENTRIES** PDF for Wathnan Racing, emailed at 08:00 UK.
 
 - **What it pulls**: every Wathnan-owned runner from five racing authorities —
   Racing Post (GB & IRE), Deutscher Galopp, France Galop, Equibase (North
@@ -199,12 +199,15 @@ RUNNERS / UPDATED ENTRIES** PDF for Wathnan Racing, emailed at 07:00 UK.
   `William Haggas` resolve to one spelling, and horses carry their country of
   foaling (`OLD IS GOLD (IRE)`). The registries live in `src/wathnan/data/`
   and grow themselves on a `--learn-suffixes` run.
-- **Scheduling**: `.github/workflows/wathnan.yml` books both 06:00 and 07:00
-  UTC and keeps whichever is 07:00 in London today, decided from which cron
+- **Scheduling**: `.github/workflows/wathnan.yml` books both 07:00 and 08:00
+  UTC and keeps whichever is 08:00 in London today, decided from which cron
   fired rather than the wall clock — GHA cron is routinely late and a clock
   check would silently skip on exactly those mornings.
-- **Recipients**: `WATHNAN_EMAIL_TO` (repo variable), falling back to
-  `EMAIL_TO`. Credentials are the shared `GMAIL_USER` / `GMAIL_APP_PASSWORD`.
+- **Recipients**: `WATHNAN_EMAIL_TO` (repo variable), defaulting in the
+  workflow to racingsquared@gmail.com and sophie@wathnan-racing.com. The
+  workflow deliberately does **not** pass `EMAIL_TO` through — the code's
+  fallback chain would otherwise reach the breeze-up distribution list.
+  Credentials are the shared `GMAIL_USER` / `GMAIL_APP_PASSWORD`.
 
 Working notes for anyone changing it — feed quirks, why each adapter looks the
 way it does — are in [`docs/wathnan-notes.md`](docs/wathnan-notes.md).

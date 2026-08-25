@@ -1,21 +1,21 @@
 name: wathnan-runners-report
 
-# Emails the Wathnan Racing runners and entries PDF at 07:00 UK, every day.
+# Emails the Wathnan Racing runners and entries PDF at 08:00 UK, every day.
 #
-# GitHub's scheduler is UTC-only, and 07:00 in London is 06:00 UTC during BST
-# and 07:00 UTC during GMT. Both slots are booked and the job keeps whichever
-# one is 07:00 locally today, stopping the other before it installs anything.
+# GitHub's scheduler is UTC-only, and 08:00 in London is 07:00 UTC during BST
+# and 08:00 UTC during GMT. Both slots are booked and the job keeps whichever
+# one is 08:00 locally today, stopping the other before it installs anything.
 #
 # The decision is made from `github.event.schedule` -- which cron fired -- and
 # never from the wall clock. GHA cron is best-effort and this repo has already
 # been bitten by it once (see the 6 Aug 2026 note in daily.yml: a slot that ran
-# ~4 hours late reported on the wrong day). A run that asked "is it 07:00 now?"
+# ~4 hours late reported on the wrong day). A run that asked "is it 08:00 now?"
 # would answer no and silently send nothing on exactly the mornings it started
-# late. Asking "am I the slot that is 07:00 in London today?" does not care.
+# late. Asking "am I the slot that is 08:00 in London today?" does not care.
 on:
   schedule:
-    - cron: "0 6 * * *"   # 07:00 London while BST is in force
-    - cron: "0 7 * * *"   # 07:00 London while GMT is in force
+    - cron: "0 7 * * *"   # 08:00 London while BST is in force
+    - cron: "0 8 * * *"   # 08:00 London while GMT is in force
   workflow_dispatch:
     inputs:
       date:
@@ -41,11 +41,12 @@ jobs:
       GMAIL_USER:         ${{ secrets.GMAIL_USER }}
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
       EMAIL_FROM:         ${{ secrets.EMAIL_FROM }}
-      # This report goes to the Wathnan team rather than the breeze-up lists,
-      # so it has its own recipient variable and only falls back to the shared
-      # one if that is unset.
-      WATHNAN_EMAIL_TO:   ${{ vars.WATHNAN_EMAIL_TO }}
-      EMAIL_TO:           ${{ secrets.EMAIL_TO }}
+      # This report goes to the Wathnan team, NOT the breeze-up distribution
+      # list. `secrets.EMAIL_TO` is deliberately not passed through: the code's
+      # fallback chain would otherwise reach it whenever the variable below is
+      # unset, and quietly mail the Wathnan report to the breeze-up recipients.
+      WATHNAN_EMAIL_TO: >-
+        ${{ vars.WATHNAN_EMAIL_TO || 'racingsquared@gmail.com,sophie@wathnan-racing.com' }}
       # Racing Post rejects Python's TLS fingerprint from cloud IPs; curl_cffi
       # impersonates Chrome instead. Bump this if RP tightens again.
       RP_IMPERSONATE:     ${{ vars.RP_IMPERSONATE || 'chrome124' }}
@@ -53,7 +54,7 @@ jobs:
         ${{ github.event.inputs.days_ahead || vars.WATHNAN_DAYS_AHEAD || '5' }}
 
     steps:
-      - name: Is this the 07:00 UK slot?
+      - name: Is this the 08:00 UK slot?
         id: gate
         run: |
           if [ "${{ github.event_name }}" != "schedule" ]; then
@@ -62,13 +63,13 @@ jobs:
           fi
           slot="${{ github.event.schedule }}"
           offset=$(date +%z)   # TZ is Europe/London: +0100 in BST, +0000 in GMT
-          if { [ "$offset" = "+0100" ] && [ "$slot" = "0 6 * * *" ]; } || \
-             { [ "$offset" = "+0000" ] && [ "$slot" = "0 7 * * *" ]; }; then
+          if { [ "$offset" = "+0100" ] && [ "$slot" = "0 7 * * *" ]; } || \
+             { [ "$offset" = "+0000" ] && [ "$slot" = "0 8 * * *" ]; }; then
             echo "due=true" >> "$GITHUB_OUTPUT"
-            echo "Slot '$slot' is 07:00 in London today (UTC$offset)."
+            echo "Slot '$slot' is 08:00 in London today (UTC$offset)."
           else
             echo "due=false" >> "$GITHUB_OUTPUT"
-            echo "Slot '$slot' is not 07:00 in London today (UTC$offset); the other cron covers it."
+            echo "Slot '$slot' is not 08:00 in London today (UTC$offset); the other cron covers it."
           fi
 
       - uses: actions/checkout@v4

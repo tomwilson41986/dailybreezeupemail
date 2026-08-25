@@ -1,7 +1,7 @@
 # Wathnan runners report — working notes
 
 Builds the daily **TOMORROW'S RUNNERS / UPDATED ENTRIES** PDF and emails it at
-07:00 UK. `README.md` explains how to use it; this file is the context a new
+08:00 UK. `README.md` explains how to use it; this file is the context a new
 session needs to change it safely — mostly things that took real digging to
 find and that are expensive to rediscover.
 
@@ -122,16 +122,16 @@ spreadsheet overflow.
 
 ## Scheduling
 
-GitHub's scheduler is UTC-only, which is 07:00 in London for half the year and
-06:00 for the other half. **Both hours are booked** and a cheap shell gate keeps
-whichever slot is 07:00 locally today, stopping the other before it spends five
-minutes installing.
+GitHub's scheduler is UTC-only, so 08:00 in London is 07:00 UTC for half the
+year and 08:00 UTC for the other half. **Both hours are booked** and a cheap
+shell gate keeps whichever slot is 08:00 locally today, stopping the other
+before it spends five minutes installing.
 
 The gate decides from **which cron fired** (`github.event.schedule`), never from
 the wall clock. GitHub's scheduler is best-effort and routinely starts 40–60
-minutes late — occasionally hours. A run that asked "is it 07:00 now?" would
+minutes late — occasionally hours. A run that asked "is it 08:00 now?" would
 answer no and silently send nothing on exactly the mornings it was already
-running late. Asking "am I the slot that is 07:00 in London today?" is immune to
+running late. Asking "am I the slot that is 08:00 in London today?" is immune to
 that. Do not reintroduce a clock check here; `--only-at` remains in the CLI only
 for standalone cron, where the scheduler is punctual.
 
