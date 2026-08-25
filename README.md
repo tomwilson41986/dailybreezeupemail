@@ -178,6 +178,37 @@ The parsers are tested offline against captured page snapshots in
 fails loudly in `tests/salescatalogues/test_sources.py` rather than silently
 emptying the digest.
 
+## Wathnan runners report (`wathnan-daily`)
+
+A third digest, unrelated to the breeze-up cohort: the daily **TOMORROW'S
+RUNNERS / UPDATED ENTRIES** PDF for Wathnan Racing, emailed at 07:00 UK.
+
+- **What it pulls**: every Wathnan-owned runner from five racing authorities —
+  Racing Post (GB & IRE), Deutscher Galopp, France Galop, Equibase (North
+  America) and QREC (Qatar, Arabian racing). Racing Post uses the same
+  `curl_cffi` Chrome impersonation as the breeze-up scrapers; Equibase is
+  behind Imperva and is covered by the Sporting Life racecard feed instead.
+- **The PDF** reproduces the client's own spreadsheet export measurement for
+  measurement — landscape US Letter, Wathnan wordmark in brand gold, a
+  `#9FC5E8` header band, horses in bold and Arabian races in italic. Layout
+  constants are documented in [`docs/wathnan-layout.md`](docs/wathnan-layout.md).
+- **Two tables**: tomorrow's declared runners, then entries for the following
+  five days. Times are shown in UK **and** Qatar time, converted through each
+  track's own timezone.
+- **Names are reconciled** across feeds before printing: `W J Haggas` and
+  `William Haggas` resolve to one spelling, and horses carry their country of
+  foaling (`OLD IS GOLD (IRE)`). The registries live in `src/wathnan/data/`
+  and grow themselves on a `--learn-suffixes` run.
+- **Scheduling**: `.github/workflows/wathnan.yml` books both 06:00 and 07:00
+  UTC and keeps whichever is 07:00 in London today, decided from which cron
+  fired rather than the wall clock — GHA cron is routinely late and a clock
+  check would silently skip on exactly those mornings.
+- **Recipients**: `WATHNAN_EMAIL_TO` (repo variable), falling back to
+  `EMAIL_TO`. Credentials are the shared `GMAIL_USER` / `GMAIL_APP_PASSWORD`.
+
+Working notes for anyone changing it — feed quirks, why each adapter looks the
+way it does — are in [`docs/wathnan-notes.md`](docs/wathnan-notes.md).
+
 ## Caveats
 
 - **Scraping Racing Post is against their ToS.** The scrapers use browser-like headers, a warm-up request, and sleeps between per-race fetches. Monitor logs — if RP tightens, bump the curl_cffi `impersonate` version or adjust `_DOC_HEADERS` / `_XHR_HEADERS`.
