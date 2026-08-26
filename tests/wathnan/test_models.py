@@ -78,3 +78,25 @@ def test_arabian_races_are_flagged():
     arabian = Race(date=dt.date(2026, 8, 19), course="LA TESTE", race_type="Prix De L'Afac PA",
                    breed=Breed.ARABIAN, runners=(Runner("SHARAH (FR)"),))
     assert arabian.breed is Breed.ARABIAN
+
+
+def test_two_spellings_of_one_course_merge_into_a_single_race():
+    """The 26 Aug report printed NAVAL LIGHT twice at Epsom on the same race.
+
+    The Racing Post adapter draws on both the owner entries page (``Epsom``,
+    no trainer) and the Sporting Life racecard (``Epsom Downs``, trainer
+    named). Unaliased they keyed apart and the horse appeared on two rows.
+    """
+    from wathnan.normalise import title_course
+
+    owner_page = race(course=title_course("Epsom"), time=(15, 0),
+                      runners=(("NAVAL LIGHT (GB)", "Havana Grey", "Rosy", "", ""),))
+    racecard = race(course=title_course("Epsom Downs"), time=(15, 0),
+                    source="sportinglife", status=Status.DECLARED,
+                    runners=(("NAVAL LIGHT (GB)", "Havana Grey", "Rosy",
+                              "Karl Burke", "James Doyle"),))
+    merged = dedupe_races([owner_page, racecard])
+    assert len(merged) == 1
+    assert merged[0].course == "EPSOM"
+    assert len(merged[0].runners) == 1
+    assert merged[0].runners[0].trainer == "Karl Burke"
