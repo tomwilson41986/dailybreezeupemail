@@ -9,7 +9,8 @@ embedded ``__NEXT_DATA__`` JSON blob, **not** in HTML attributes. (RP migrated
 away from the old ``data-ugc-runnerid`` / ``RC-runnerName`` markup the previous
 version of this module scraped — that markup is gone from the live pages, so
 the old selectors matched nothing and the racecard join silently returned zero
-hits. The /results pages still use the old HTML, so rp_results is unaffected.)
+hits. RP did the same to /results in August 2026, with the same symptom; see
+``rp_results``, which now reads its own ``__NEXT_DATA__`` payload too.)
 
 We read each race's ``runners`` array from the JSON and match a runner to our
 catalogue two ways:
