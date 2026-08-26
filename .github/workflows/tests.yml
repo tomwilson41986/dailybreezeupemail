@@ -1,0 +1,50 @@
+name: tests
+
+# Runs the offline test suite on every push and pull request.
+#
+# Until now the four jobs in this repo were all `schedule` + `workflow_dispatch`,
+# so nothing ever ran pytest automatically — the suite only executed when
+# someone remembered to run it by hand. A code regression could therefore reach
+# the 04:00/21:00 crons unchallenged.
+#
+# Scope note, so this workflow isn't mistaken for more protection than it gives:
+# these tests are entirely offline, driven by captured Racing Post fixtures. They
+# catch regressions in *our* code. They cannot catch RP changing its own markup
+# under us — the August 2026 /results migration sailed past a green suite,
+# because the fixture still held the old markup that the live site had dropped.
+# The guard for that class of failure is the runtime tripwire in
+# racing/rp_results.py (ResultPayloadMissing + the read N/M coverage log), not
+# this workflow.
+#
+# Lint is deliberately not gated here: `ruff check` currently reports ~35
+# pre-existing findings across the repo, so adding it would paint CI red on day
+# one. Worth a separate clean-up pass before wiring it in.
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+# A newer push supersedes an in-flight run on the same ref.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # dev = pytest + pdfplumber (the Wathnan tests read the generated PDF
+      # back); xlsx = openpyxl, which tests/test_weekly.py needs via
+      # dailybreezeup.results_report.
+      - name: Install
+        run: pip install -e ".[dev,xlsx]"
+
+      - name: Run tests
+        run: pytest -q
