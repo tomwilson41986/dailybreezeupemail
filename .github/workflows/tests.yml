@@ -1,6 +1,7 @@
 name: tests
 
-# Runs the offline test suite on every push and pull request.
+# Runs the offline test suite on every pull request, and on pushes to the
+# branch the scheduled jobs run from.
 #
 # Until now the four jobs in this repo were all `schedule` + `workflow_dispatch`,
 # so nothing ever ran pytest automatically — the suite only executed when
@@ -21,7 +22,13 @@ name: tests
 # one. Worth a separate clean-up pass before wiring it in.
 on:
   pull_request:
+  # Push is scoped to the branch the crons actually run from, so a PR gets one
+  # pytest check rather than two identical ones (a `push:` with no filter fires
+  # again on every PR branch update). Post-merge verification still happens
+  # here; if this branch is ever renamed, PR coverage is unaffected.
   push:
+    branches:
+      - claude/breeze-up-email-notifications-Pii7o
   workflow_dispatch:
 
 # A newer push supersedes an in-flight run on the same ref.
