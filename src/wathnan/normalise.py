@@ -309,8 +309,15 @@ def collapse_space(value: str | None) -> str:
 COURSE_ALIASES = {
     "LA TESTE DE BUCH": "LA TESTE-BASSIN ARCACHON",
     "PARISLONGCHAMP": "PARIS LONGCHAMP",
+    # Racing Post still uses the pre-2018 name; France Galop uses the current
+    # one. Both reach the same race, so they have to land on one spelling.
+    "LONGCHAMP": "PARIS LONGCHAMP",
     "DONOSTIA": "SAN SEBASTIAN",
     "DONOSTIA-SAN SEBASTIAN": "SAN SEBASTIAN",
+    # The owner entries page says Epsom, the Sporting Life racecard says Epsom
+    # Downs, and both feed the Racing Post adapter -- unaliased, one runner
+    # printed as two rows on the same race.
+    "EPSOM DOWNS": "EPSOM",
 }
 
 

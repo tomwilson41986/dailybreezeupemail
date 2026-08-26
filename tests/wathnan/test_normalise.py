@@ -12,6 +12,7 @@ from wathnan.normalise import (
     parse_distance,
     parse_time,
     qatar_time,
+    title_course,
     title_name,
     to_uk_time,
 )
@@ -100,3 +101,16 @@ def test_headline_dates():
     assert format_long_date(dt.date(2026, 8, 14)) == "FRIDAY 14TH AUGUST"
     assert [ordinal(n) for n in (1, 2, 3, 11, 12, 13, 21, 22)] == \
         ["1ST", "2ND", "3RD", "11TH", "12TH", "13TH", "21ST", "22ND"]
+
+
+# -- courses one feed names differently from another ----------------------------
+def test_course_aliases_converge_on_one_spelling():
+    """A course spelt two ways must reach one name or it prints as two rows.
+
+    Both pairs below were live: Racing Post's owner entries page says ``Epsom``
+    where the Sporting Life racecard says ``Epsom Downs``, and Racing Post still
+    uses ``Longchamp`` where France Galop uses the course's current name.
+    """
+    assert title_course("Epsom Downs") == title_course("Epsom") == "EPSOM"
+    assert (title_course("Longchamp") == title_course("ParisLongchamp")
+            == "PARIS LONGCHAMP")
