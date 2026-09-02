@@ -10,7 +10,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _ALWAYS_RECIPIENTS: tuple[str, ...] = (
     "racingsquared@gmail.com",
     "stuart@blandfordbloodstock.com",
-    "richard@blandfordbloodstock.com",
     "fred@blandfordbloodstock.com",
 )
 
