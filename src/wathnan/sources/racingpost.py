@@ -271,7 +271,10 @@ JOCKEY_KEYS = ("jockeyname", "jockey")
 COURSE_KEYS = ("coursename", "course", "meetingname", "track", "racecoursename")
 DATE_KEYS = ("racedate", "date", "meetingdate", "raceday")
 TIME_KEYS = ("racetime", "offtime", "time", "racetimeuk")
-RACE_KEYS = ("racename", "racetitle", "race", "racetype")
+# The owner entries page ships the title as raceInstanceTitle. Without it
+# every race the racecard sweep has not published yet -- North American
+# cards most of all -- printed with an empty RACE cell.
+RACE_KEYS = ("racename", "racetitle", "raceinstancetitle", "race", "racetype")
 DISTANCE_KEYS = ("distance", "racedistance", "distancef")
 SIRE_KEYS = ("sirename", "sire")
 DAM_KEYS = ("damname", "dam")
