@@ -251,6 +251,27 @@ def test_racingpost_reads_entries_out_of_embedded_state(wathnan_config):
     assert races[0].runners[0].dam == "Vigui's Heart"
 
 
+def test_racingpost_reads_the_race_title_off_the_live_owner_page(wathnan_config, fixtures):
+    """The owner page ships the title as ``raceInstanceTitle``.
+
+    Reports for the first week of September printed an empty RACE cell for
+    every North American entry. GB rows looked fine only because the Sporting
+    Life racecard filled the name in on merge; a US card is not published until
+    the day, so the Racing Post row stood alone -- and the walker did not know
+    the key the title was under.
+    """
+    body = (fixtures / "racingpost_owner_entries.html").read_text(encoding="utf-8")
+    records = list(RacingPostSource(wathnan_config)._from_state(body))
+    assert len(records) == 3
+    races = {r.course: r for r in _group_records(records, "https://example.invalid", "racingpost")}
+    assert set(races) == {"KENTUCKY DOWNS", "SALISBURY", "KEMPTON"}
+    assert races["KENTUCKY DOWNS"].race_type == (
+        "Mint Millions Invitational Stakes (Grade 3) (Turf)")
+    assert races["KENTUCKY DOWNS"].runners[0].horse == "HAATEM"
+    # Every row carries its title, not just the one that was noticed.
+    assert all(race.race_type for race in races.values())
+
+
 def test_racingpost_reads_entries_out_of_a_rendered_table(wathnan_config):
     html = """<html><body><h2>19 August 2026</h2><table>
       <thead><tr><th>Course</th><th>Race</th><th>Distance</th><th>Time</th><th>Horse</th>
