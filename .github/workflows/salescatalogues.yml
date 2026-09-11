@@ -12,7 +12,7 @@ name: daily-sales-catalogues
 # source failures are isolated so one broken site never sinks the whole digest.
 on:
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "0 6 * * 5"
   workflow_dispatch:
     inputs:
       date:
