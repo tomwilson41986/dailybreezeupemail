@@ -23,6 +23,11 @@ URL = "https://bbag-sales.de/events2026~en_GB"
 LOTS_API = (
     "https://backend.3forone.auction/api/v1/bbag-auction/auction/{slug}/auctionlots"
 )
+# Every auction on the platform, with its slug ("bbag-august-online-sale-2026")
+AUCTIONS_API = "https://backend.3forone.auction/api/v1/bbag-auction/auction/"
+# Online lots are named "01 - Aktivist"
+_LOT_PREFIX_RE = re.compile(r"^\d+\s*-\s*")
+_YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
 
 _DATEY_RE = re.compile(
     r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*.*?20\d{2}", re.IGNORECASE
@@ -84,19 +89,41 @@ def parse_lots(rows: list) -> list[Lot]:
             continue
         rel = lot.get("rel") or {}
         ped = rel.get("pedigree") or {}
+        year = _YEAR_RE.search(rel.get("birthday") or "")
         lots.append(
             Lot(
                 lot_no=str(lot.get("number") or "").strip(),
-                horse_name=(rel.get("name") or "").strip(),
+                horse_name=_LOT_PREFIX_RE.sub("", (rel.get("name") or "").strip()),
                 sex=(rel.get("sex") or "").strip(),
                 colour=(rel.get("color") or "").strip().title(),
                 sire=(ped.get("v") or "").strip(),
                 dam=(ped.get("m") or "").strip(),
                 dam_sire=(ped.get("mv") or "").strip(),
                 vendor=(lot.get("vendor") or "").strip(),
+                yob=int(year.group(0)) if year else None,
+                covering_sire=(lot.get("inFoalTo") or "").strip(),
             )
         )
     return lots
+
+
+def _words(name: str) -> set[str]:
+    """A sale name's words, for matching: "Christmas Online-Sale 2026" and
+    "BBAG CHRISTMAS ONLINE-SALE 2026" agree."""
+    return set(re.findall(r"[a-z0-9]+", name.lower())) - {"bbag", "sale", "auction"}
+
+
+def find_slug(auctions: list, name: str) -> str:
+    """The platform's slug for a calendar sale, by its name's words; one name may
+    carry a word the other lacks ("Hit Spring Sale 2026 Online")."""
+    want = _words(name)
+    for a in auctions or []:
+        if not (isinstance(a, dict) and a.get("slug")):
+            continue
+        have = _words(a.get("name") or "")
+        if have and (have <= want or want <= have):
+            return a["slug"]
+    return ""
 
 
 def _candidate_slugs(name: str, year: int | None) -> list[str]:
@@ -116,13 +143,18 @@ def _candidate_slugs(name: str, year: int | None) -> list[str]:
 
 
 def fetch_lots(raw: RawSale, session=None) -> list[Lot]:
-    """Best-effort: BBAG's 3forONE slugs aren't discoverable from a list
-    endpoint, so we try a few slug guesses against the open lots API and use the
-    first that resolves. Returns [] if none match (CSV falls back to a summary
-    row)."""
+    """The sale's slug from the platform's auction list, matched by name; failing
+    that, a few slug guesses against the open lots API. Returns [] if none
+    resolve (the CSV falls back to a summary row; an online sale is listed once
+    its catalogue is up)."""
     session = session or make_session()
     year = raw.start_date.year if raw.start_date else None
-    for slug in _candidate_slugs(raw.name, year):
+    try:
+        listed = find_slug(get_json(session, AUCTIONS_API), raw.name)
+    except Exception as exc:  # noqa: BLE001
+        log.info("BBAG auction list unavailable: %s", exc)
+        listed = ""
+    for slug in ([listed] if listed else []) + _candidate_slugs(raw.name, year):
         try:
             rows = get_json(session, LOTS_API.format(slug=slug))
         except Exception:  # noqa: BLE001

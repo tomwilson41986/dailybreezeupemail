@@ -41,9 +41,10 @@ _STAMP_RE = re.compile(r"([A-Za-z]{3,9})\s+(\d{1,2}),\s*(\d{4})")
 # Collection id in the card's link, e.g. /collection/76.
 _COLLECTION_RE = re.compile(r"/collection/(\d+)")
 # Unnamed youngstock are listed as "'24 Blue Point (IRE) ex Golden Pearl (GB)".
-_UNNAMED_RE = re.compile(r"^['’]\d{2}\b")
+_UNNAMED_RE = re.compile(r"^['‘’]\d{2}\b")
 # The "(Sire x dam)" pedigree line under the horse name.
 _PEDIGREE_SPLIT_RE = re.compile(r"\s+x\s+", re.IGNORECASE)
+_YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
 
 
 def _pretty(name: str) -> str:
@@ -122,7 +123,9 @@ def parse_lots(html: str) -> list[Lot]:
 
     Every row is rendered twice — once for mobile, once for desktop — so we read
     only the ``scope="row-desktop"`` cells, keyed by their ``data-header`` where
-    the site provides one. Colour and damsire aren't published.
+    the site provides one. The Age cell's tooltip is the foaling date; a shown
+    "HORSE WITHDRAWN" ribbon marks a withdrawal. Colour and damsire aren't
+    published.
     """
     doc = lxml.html.fromstring(html)
     lots: list[Lot] = []
@@ -135,10 +138,12 @@ def parse_lots(html: str) -> list[Lot]:
             continue
         cells = {td.get("data-header"): td for td in tds if td.get("data-header")}
 
-        name_td = next((td for td in tds if td.cssselect("span.font-weight-bold")), None)
+        # the name span was "font-weight-bold" until 2026, "fw-bold" since
+        bold = "span.fw-bold, span.font-weight-bold"
+        name_td = next((td for td in tds if td.cssselect(bold)), None)
         name = sire = dam = ""
         if name_td is not None:
-            strong = name_td.cssselect("span.font-weight-bold")[0]
+            strong = name_td.cssselect(bold)[0]
             name = squash(strong.text_content())
             # The "(Sire x dam)" line sits after a <br>, so it's the tail of the
             # name span's following siblings rather than of the span itself.
@@ -158,6 +163,10 @@ def parse_lots(html: str) -> list[Lot]:
         if not sex:
             sex = _cell(cells, "Sex")
 
+        age_td = cells.get("Age")
+        born = _YEAR_RE.search(age_td.get("title") or "") if age_td is not None else None
+        link = row.cssselect('a[href^="/auction/"]')
+        gone = row.cssselect(".auction-not-auctioned")
         lots.append(
             Lot(
                 lot_no=lot_no,
@@ -166,6 +175,10 @@ def parse_lots(html: str) -> list[Lot]:
                 sire=sire,
                 dam=dam,
                 vendor=_cell(cells, "Consignor"),
+                yob=int(born.group(0)) if born else None,
+                lot_type=_cell(cells, "Horse type"),
+                withdrawn=bool(gone) and "none" not in (gone[0].get("style") or "").replace(" ", ""),
+                url=f"{BASE}{link[0].get('href')}" if link else "",
             )
         )
     return lots

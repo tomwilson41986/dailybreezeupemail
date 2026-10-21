@@ -142,8 +142,11 @@ headings and per-sale-type icons), with the full list attached as a CSV.
   catalogue is published. Each source has a `fetch_lots` adapter hitting that
   house's catalogue API/page (Tattersalls' 4D listing, Goffs' sale page,
   Arqana's lot grid, OBS/Keeneland/Fasig-Tipton/Gavelhouse/BBAG JSON APIs,
-  Inglis/Magic Millions/NZB/ThoroughBid tables). Sales without a published
-  catalogue (or behind auth, e.g. Inglis Digital) fall back to a single summary
+  Inglis/Magic Millions/NZB/ThoroughBid tables). Online sales come through the
+  same way: GoffsGo's lot cards, Arqana online's catalogue page, BBAG's
+  3forONE auction list, Inglis Digital's Pegasus catalogue and Magic Millions
+  Digital's BidJS listings (part-shares and breeding rights are tagged in the
+  lot type). Sales without a published catalogue fall back to a single summary
   row. Damsire isn't published by every house. Only sales within `HORIZON_DAYS`
   are listed.
 
@@ -177,6 +180,24 @@ The parsers are tested offline against captured page snapshots in
 `tests/fixtures/salescatalogues/`, so a site redesign that breaks a selector
 fails loudly in `tests/salescatalogues/test_sources.py` rather than silently
 emptying the digest.
+
+## Gun Runner Mare Prospects (`gunrunner-weekly`)
+
+A Friday email: every filly and mare with race form catalogued worldwide for a
+sale in the next ten weeks (horses in training, maidens off the track, first-foal
+mares), scored out of 100 as a Gun Runner mate. Unraced stock can be switched on
+with the `GUNRUNNER_INCLUDE_UNRACED` repo variable. Fillies from the
+horses-in-training sales just below the main bar (Timeform 92+, 7.5-10.5f) are
+listed apart as the HIT watch. Lots come through the
+Sales Catalogues adapters above; each horse is enriched from the desk's sale
+data, Equibase (parse.bot), the backend results table and the worldwide file,
+with her family to the third dam and, unraced, a forecast of her trip. The PDF
+(one page per prospect, Winchell style) and the CSVs are attached.
+
+`.github/workflows/gunrunner-weekly.yml` sends at 07:00 London on Fridays, with
+a cache-filling run on Wednesdays. Recipients default to racingsquared@gmail.com
+and greg@p2bloodstock.com (`GUNRUNNER_EMAIL_TO` overrides). Details in
+[`docs/gunrunner.md`](docs/gunrunner.md).
 
 ## Wathnan runners report (`wathnan-daily`)
 

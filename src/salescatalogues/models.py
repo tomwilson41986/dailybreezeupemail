@@ -127,6 +127,14 @@ class Lot:
     dam: str = ""
     dam_sire: str = ""              # sire of dam (damsire)
     vendor: str = ""                # consignor / vendor / seller
+    # Filled where the house publishes them (read by the Gun Runner weekly):
+    yob: int | None = None          # year of birth
+    covering_sire: str = ""         # a mare's cover ("" when maiden / not stated)
+    lot_type: str = ""              # the house's own type code: MAR, HIT, YRL, Maiden, B, W...
+    breeding_status: str = ""       # PR pregnant / NP not pregnant / NM not mated (Keeneland)
+    withdrawn: bool = False
+    ref: str = ""                   # registry reference where published (Jockey Club ref no.)
+    url: str = ""                   # the lot's page on the house site
 
 
 @dataclass

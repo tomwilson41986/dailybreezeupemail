@@ -35,6 +35,11 @@ _STATUS_RE = re.compile(r"sale-card--status-([a-z-]+)")
 _CODE_RE = re.compile(r"/4DCGI/Sale/([A-Za-z0-9]+)")
 # "2023 Ch.F." -> capture the colour+sex token after the year of birth.
 _COLSEX_RE = re.compile(r"\b\d{4}\s+([A-Za-z.]+)")
+_YOB_RE = re.compile(r"\b((?:19|20)\d{2})\b")
+# a foal row's "... The Blue Bower (IRE) Bl/Gr.F. (GB)": the colour+sex token after the dam
+_FOAL_COLSEX_RE = re.compile(r"\b([A-Z][A-Za-z]*(?:/[A-Za-z]+)?\.[CFGMHR]\.)")
+# a mare's cover where the listing prints it: "Covered by Kingman (GB)", "In foal to ..."
+_COVER_RE = re.compile(r"(?:Covered by|In foal to|Carrying to)\s+([A-Z][A-Za-z' .-]+?(?:\s\([A-Z]{2,3}\))?)(?=$|\s{2}|[,;.](?:\s|$))", re.I)
 
 
 def parse_saledates(
@@ -99,16 +104,35 @@ def parse_lots(html: str) -> list[Lot]:
             elif label == "EX":
                 dam = (s.tail or "").strip()
 
+        text = squash(tdh[0].text_content())
         ht = tdh[0].cssselect("span.ht")
-        token = squash(ht[0].tail) if ht and ht[0].tail else squash(tdh[0].text_content())
+        token = squash(ht[0].tail) if ht and ht[0].tail else text
         cm = _COLSEX_RE.search(token)
         sex, colour = split_sex_colour(cm.group(1)) if cm else ("", "")
+        ym = _YOB_RE.search(token)
+        yob = int(ym.group(1)) if ym else None
+
+        # Unnamed youngstock are listed "Sire / Dam  Col.Sex." with no BY / EX
+        # labels: the two horse links are the sire and the dam.
+        if not sire and not dam and len(name_el) >= 2:
+            sire = squash(name_el[0].text_content())
+            dam = squash(name_el[1].text_content())
+            name = ""
+            fm = _FOAL_COLSEX_RE.search(text)
+            if fm:
+                sex, colour = split_sex_colour(fm.group(1))
+        cover = _COVER_RE.search(text)
 
         col2 = tr.cssselect("td.col2type")
         vendor = ""
         if col2:
             nxt = col2[0].getnext()
             vendor = squash(nxt.text_content()) if nxt is not None else ""
+        else:
+            # youngstock rows have no type column: the consignor follows the horse cell
+            nxt = tdh[0].getnext()
+            if nxt is not None and "price" not in (nxt.get("class") or ""):
+                vendor = squash(nxt.text_content())
 
         lots.append(
             Lot(
@@ -119,6 +143,8 @@ def parse_lots(html: str) -> list[Lot]:
                 sire=sire,
                 dam=dam,
                 vendor=vendor,
+                yob=yob,
+                covering_sire=squash(cover.group(1)) if cover else "",
             )
         )
     return lots
