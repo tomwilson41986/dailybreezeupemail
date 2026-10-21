@@ -273,10 +273,13 @@ def family_panel(a: Assessment) -> str:
         if not lv.dam:
             continue
         rec = runner_line(lv.dam_record) if lv.dam_record else "Record not held"
-        kids = sorted(
+        ranked = sorted(
             [k for k in lv.produce if k.raced],
             key=lambda k: (-class_points(k), -(k.dirt_wins or 0)),
-        )[:4]
+        )
+        # the dirt winners the case cites always show, then the best of the rest
+        dirt = [k for k in ranked if k.dirt_wins][:2]
+        kids = sorted(dirt + [k for k in ranked if k not in dirt][: 4 - len(dirt)], key=ranked.index)
         s = lv.summary()
         rows = "".join(
             f"<tr><td>{e(k.name)}{' <b class=d>D</b>' if k.dirt_wins else ''}</td><td>{e(runner_line(k))}</td></tr>"

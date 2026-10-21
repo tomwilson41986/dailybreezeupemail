@@ -59,5 +59,7 @@ def display(name: str) -> str:
     if base.isupper():
         base = re.sub(r"(^|[\s(-])([a-z])", lambda m: m.group(1) + m.group(2).upper(), base.lower())
         base = re.sub(r"\b(O|D|L)'([a-z])", lambda m: f"{m.group(1)}'{m.group(2).upper()}", base)
-        base = re.sub(r"\(([a-z]{2,4})\)", lambda m: f"({m.group(1).upper()})", base)
+        base = re.sub(r"\(([A-Za-z]{2,4})\)", lambda m: f"({m.group(1).upper()})", base)
+        base = re.sub(r"\bMc([a-z])", lambda m: f"Mc{m.group(1).upper()}", base)
+        base = re.sub(r"\b(Llc|Lp|Ii|Iii|Iv)\b", lambda m: m.group(1).upper(), base)
     return base

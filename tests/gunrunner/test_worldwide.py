@@ -10,6 +10,9 @@ def test_names():
     assert split_suffix("Gun Runner (US)") == ("Gun Runner", "USA")
     assert display("QUIET GIANT") == "Quiet Giant"
     assert display("Mixed Case") == "Mixed Case"
+    assert display("POWERSCOURT (GB)") == "Powerscourt (GB)"
+    assert display("MCKINZIE") == "McKinzie"
+    assert display("WINCHELL THOROUGHBREDS LLC") == "Winchell Thoroughbreds LLC"
 
 
 def test_dirt_rule():
