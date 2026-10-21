@@ -123,3 +123,26 @@ def test_backend_namesakes_are_not_hers():
     assert not _same_mare({"sex": "f", "foalingYear": 2013, "sire": "RIBCHESTER"}, syracuse)
     assert _same_mare({"sex": "f", "foalingYear": 2019, "sire": None}, syracuse)
     assert _same_mare({"sex": "f", "foalingYear": None, "sire": "RIBCHESTER"}, syracuse)
+
+
+def test_hit_watch(enricher):
+    from gunrunner.enrich import Profile
+    from gunrunner.score import is_hit_sale
+
+    assert is_hit_sale(cand(sale_type="HIT"))
+    assert is_hit_sale(cand(online=True)) and is_hit_sale(cand(lot_type="RF"))
+    assert not is_hit_sale(cand(sale_type="Broodmare"))
+    # Sprint Boy runs at 6f: off the main list, and too short for the watch too
+    sprint = assess(enricher.profile(cand(name="Sprint Boy", sire="Into Mischief", dam="Route Queen",
+                                          yob=2021, sale_type="HIT")))
+    assert not sprint.qualifies and not sprint.watch
+    # a 9f filly from a HIT sale rated Timeform 94: below the main bar, on the watch
+    p = enricher.profile(cand(name="Queen's Gift", sire="Curlin", dam="Route Queen", yob=2020,
+                              sale_type="HIT"))
+    p.own.g1_wins = p.own.group_wins = p.own.stakes_wins = 0
+    p.own.prize_usd, p.own.rating, p.stakes = 0, 94.0, (0.0, "No stakes form")
+    a = assess(p)
+    assert a.class_pts == 13 and not a.qualifies and a.watch
+    # the same filly from a breeding-stock sale isn't a HIT-watch horse
+    p.c = cand(name="Queen's Gift", sire="Curlin", dam="Route Queen", yob=2020, sale_type="Broodmare")
+    assert not assess(p).watch

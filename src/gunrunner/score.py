@@ -17,6 +17,11 @@ Unraced (foals, yearlings, unraced fillies and mares):
   Family produce  10  the dam's winners and stakes winners
 
 Gun Runner's daughters are out; Candy Ride-line sires lose 5 (Candy Ride 2x3).
+
+HIT watch: fillies and mares from the horses-in-training and online sales that
+miss the main list but rate Timeform 92+ (E 93+, or black-type placed) with a
+best trip of 7.5-10.5f, the same status and dirt rules applying. Listed apart,
+below the main list.
 """
 
 from __future__ import annotations
@@ -51,7 +56,15 @@ TRIP = (8.0, 10.0)
 FIT_LO, FIT_HI = 0.20, 0.45
 FIT_MIN = 0.33  # an unraced filly's forecast share at 8-10f: about the top fifth
 UNRACED_MIN = 55
-FIRST_FOAL_AGE = 6  # a covered mare with no produce known is taken as a first foal up to this age
+FIRST_FOAL_AGE = 6
+WATCH_CLASS_MIN = 13  # Timeform 92, E 93, or black-type placed
+WATCH_TRIP = (7.5, 10.5)
+# the houses' codes for a horse in training (Goffs, ThoroughBid, Inglis / MM racing filly)
+HIT_LOT_TYPES = {
+    "HIT",
+    "HORSE IN TRAINING",
+    "RF",
+}  # a covered mare with no produce known is taken as a first foal up to this age
 _COVERS = {key(s) for s in COVER_SIRES}
 _CANDY = {key(s) for s in CANDY_RIDE}
 
@@ -68,6 +81,7 @@ class Assessment:
     qualifies: bool = False
     reasons: list[str] = field(default_factory=list)  # why not, when not
     candy: bool = False
+    watch: bool = False  # on the HIT watch, below the main list
     class_pts: float = 0.0
     dirt_depth: int | None = None
 
@@ -200,6 +214,11 @@ def dirt_ok(p: Profile, depth: int | None) -> bool:
     return own or depth is not None
 
 
+def is_hit_sale(c) -> bool:
+    """A horses-in-training sale, an online sale, or a lot catalogued in training."""
+    return c.sale_type == "HIT" or c.online or c.lot_type.upper() in HIT_LOT_TYPES
+
+
 def assess(p: Profile) -> Assessment:
     status, ok = status_of(p)
     a = Assessment(
@@ -261,4 +280,14 @@ def assess(p: Profile) -> Assessment:
     if not ok:
         a.reasons.insert(0, status)
     a.qualifies = ok and not a.reasons
+    a.watch = (
+        not a.qualifies
+        and ok
+        and a.track == "raced"
+        and is_hit_sale(p.c)
+        and a.class_pts >= WATCH_CLASS_MIN
+        and p.trip is not None
+        and WATCH_TRIP[0] <= p.trip <= WATCH_TRIP[1]
+        and dirt_ok(p, a.dirt_depth)
+    )
     return a

@@ -102,7 +102,8 @@ def run(
     if eq is not None:
         spent_on = 0
         for i in sorted(
-            (i for i, a in enumerate(scored) if _worth_equibase(a, st.gunrunner_include_unraced)), key=lambda i: -scored[i].score
+            (i for i, a in enumerate(scored) if _worth_equibase(a, st.gunrunner_include_unraced)),
+            key=lambda i: -scored[i].score,
         ):
             if not eq.can_spend:
                 break
@@ -125,11 +126,14 @@ def run(
         (a for a in scored if a.qualifies), key=lambda a: (-a.score, a.p.c.sale_date or date.max)
     )
     new_ids = {a.lot_id for a in rows if cache.first_reported(a.lot_id) is None}
-    log.info("prospects: %d (%d new)", len(rows), len(new_ids))
+    # the HIT watch: fillies in training just below the main list
+    watch = sorted((a for a in scored if a.watch), key=lambda a: -a.score)
+    new_ids |= {a.lot_id for a in watch if cache.first_reported(a.lot_id) is None}
+    log.info("prospects: %d, HIT watch: %d (%d new)", len(rows), len(watch), len(new_ids))
 
     stamp = today.isoformat()
     csv_p = out / f"Gun Runner Mare Prospects {stamp}.csv"
-    csv_p.write_text(csvout.to_csv(rows, new_ids, ranked=True), encoding="utf-8")
+    csv_p.write_text(csvout.to_csv(rows, new_ids, ranked=True, watch=watch), encoding="utf-8")
     everyone = sorted(scored, key=lambda a: (-a.qualifies, -a.score))
     csv_all = out / f"Gun Runner all scored {stamp}.csv"
     csv_all.write_text(csvout.to_csv(everyone, new_ids, ranked=False), encoding="utf-8")
@@ -138,7 +142,7 @@ def run(
     if not no_pdf:
         raced_us = [
             {"lot_id": a.lot_id, "name": a.p.c.name, "sire": a.p.c.sire, "dam": a.p.c.dam}
-            for a in rows
+            for a in rows + watch
             if a.track == "raced" and a.p.c.region == US and a.p.c.named
         ]
         try:
@@ -146,7 +150,7 @@ def run(
         except Exception as exc:  # noqa: BLE001
             log.warning("silks failed: %s", exc)
             silk = {}
-        for a in rows:
+        for a in rows + watch:
             if silk.get(a.lot_id, {}).get("url"):
                 a.p.links["hrn"] = silk[a.lot_id]["url"]
         html = report.build(
@@ -157,6 +161,7 @@ def run(
             new_ids=new_ids,
             silks=silk,
             include_unraced=st.gunrunner_include_unraced,
+            watch=watch,
         )
         pdf_p = pdf.render(html, out / f"Gun Runner Mare Prospects {stamp}.pdf")
         if pdf_p.stat().st_size <= PDF_LIMIT:
@@ -173,6 +178,7 @@ def run(
         scored=len(scored),
         new_ids=new_ids,
         attachments=attachments,
+        watch=watch,
         pool="fillies and mares" if st.gunrunner_include_unraced else "raced fillies and mares",
     )
     (out / "email.html").write_text(mail.html, encoding="utf-8")
@@ -181,6 +187,7 @@ def run(
         "date": stamp,
         "fillies_and_mares": len(scored),
         "prospects": len(rows),
+        "hit_watch": len(watch),
         "new": len(new_ids),
         "raced": sum(1 for a in rows if a.track == "raced"),
         "sales": meta["sales"],
@@ -199,7 +206,7 @@ def run(
     except Exception as exc:  # noqa: BLE001
         log.exception("send failed: %s", exc)
         return 1
-    for a in rows:
+    for a in rows + watch:
         cache.mark_reported(a.lot_id, a.score, today)
     return 0
 

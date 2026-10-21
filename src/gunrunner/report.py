@@ -12,7 +12,14 @@ from importlib import resources
 from gunrunner.config import COVER_SIRES
 from gunrunner.family import LEVEL_WEIGHT, Runner, class_points, label
 from gunrunner.forecast import BINS, WINDOW
-from gunrunner.score import CLASS_MIN, FIT_MIN, UNRACED_MIN, Assessment
+from gunrunner.score import (
+    CLASS_MIN,
+    FIT_MIN,
+    UNRACED_MIN,
+    WATCH_CLASS_MIN,
+    WATCH_TRIP,
+    Assessment,
+)
 
 MAROON, MAROON_D, INK, GREY, PAPER, LINE = (
     "#932E32",
@@ -279,7 +286,9 @@ def family_panel(a: Assessment) -> str:
         )
         # the dirt winners the case cites always show, then the best of the rest
         dirt = [k for k in ranked if k.dirt_wins][:2]
-        kids = sorted(dirt + [k for k in ranked if k not in dirt][: 4 - len(dirt)], key=ranked.index)
+        kids = sorted(
+            dirt + [k for k in ranked if k not in dirt][: 4 - len(dirt)], key=ranked.index
+        )
         s = lv.summary()
         rows = "".join(
             f"<tr><td>{e(k.name)}{' <b class=d>D</b>' if k.dirt_wins else ''}</td><td>{e(runner_line(k))}</td></tr>"
@@ -543,6 +552,11 @@ table {{ border-collapse: collapse; width: 100%; }}
 """
 
 
+WATCH_TEXT = (
+    f"class {WATCH_CLASS_MIN}/25 or better (Timeform 92, E 93, or black-type placed), "
+    f"best win or peak run {WATCH_TRIP[0]:g}–{WATCH_TRIP[1]:g}f."
+)
+
 UNRACED_RULES = """  <h3>Unraced</h3>
   <table class="model">
     <tr><td>Pedigree</td><td class=w>25</td><td>As raced.</td></tr>
@@ -563,10 +577,12 @@ def build(
     new_ids: set[str],
     silks: dict[str, dict],
     include_unraced: bool = True,
+    watch: list[Assessment] = (),
 ) -> str:
+    watch = list(watch)
     raced = sum(1 for r in rows if r.track == "raced")
     in_training = sum(1 for r in rows if r.status == "In training")
-    n_new = sum(1 for r in rows if r.lot_id in new_ids)
+    n_new = sum(1 for r in rows + watch if r.lot_id in new_ids)
     houses = sorted({s["house"] for s in sales if s.get("females")})
     unraced_rules = UNRACED_RULES if include_unraced else ""
     unraced_qualify = (
@@ -581,8 +597,8 @@ def build(
     <h1>Gun Runner<br>Mare Prospects</h1>
     <div class="lede">{"Fillies and mares" if include_unraced else "Fillies and mares with race form"} catalogued worldwide in the next ten weeks that best fit Gun Runner. {e(", ".join(houses))}.</div>
   </div>
-  <div class="foot"><div><b>{scored:,}</b>{"fillies and mares" if include_unraced else "raced fillies and mares"} scored</div><div><b>{len(rows)}</b>prospects</div>
-    {f'<div><b>{raced} · {len(rows) - raced}</b>raced · unraced</div>' if include_unraced else f'<div><b>{in_training} · {len(rows) - in_training}</b>in training · off the track</div>'}<div><b>{n_new}</b>new this week</div></div>
+  <div class="foot"><div><b>{scored:,}</b>{"fillies and mares" if include_unraced else "raced fillies and mares"} scored</div><div><b>{len(rows)}{f" · {len(watch)}" if watch else ""}</b>prospects{" · HIT watch" if watch else ""}</div>
+    {f"<div><b>{raced} · {len(rows) - raced}</b>raced · unraced</div>" if include_unraced else f"<div><b>{in_training} · {len(rows) - in_training}</b>in training · off the track</div>"}<div><b>{n_new}</b>new this week</div></div>
 </section>"""
     intro = f"""
 <section class="page intro">
@@ -603,19 +619,23 @@ def build(
     {unraced_qualify}
     <tr><td>Dirt</td><td class=w></td><td>US: her own dirt form{", or the dam's (unraced)" if include_unraced else ""}. Europe and Australasia: dirt form anywhere to the 3rd dam.</td></tr>
     <tr><td>Status</td><td class=w></td><td>{"Foals, yearlings, 2yos, fillies in training, maidens: all" if include_unraced else "Raced only. Fillies in training and mares off the track: all"}. Covered: first foal only, by {e(", ".join(COVER_SIRES))}. No experienced mares.</td></tr>
+    <tr><td>HIT watch</td><td class=w></td><td>Horses-in-training and online sales, listed apart below the main list: {WATCH_TEXT}</td></tr>
     <tr><td>Out</td><td class=w></td><td>Gun Runner's daughters. Candy Ride-line sires lose 5.</td></tr>
   </table>
   <h3>Match scores</h3>
   {bands(rows)}
 </section>"""
-    trs = [
-        f"<tr><td>{i}</td><td class=sc>{r.score:.0f}</td><td>{e(r.p.c.house)}</td><td>{e(r.p.c.lot_no)}</td>"
-        f"<td class=nm>{e(r.p.c.display_name)}{' ●' if r.lot_id in new_ids else ''}</td><td>{r.p.c.age if r.p.c.age is not None else ''}</td>"
-        f"<td>{e(r.status)}</td><td>{e(r.p.c.sire)}</td><td>{e(peak_text(r))}</td>"
-        f"<td>{LEVEL_NAME.get(r.dirt_depth, '–') if r.dirt_depth else ('Own' if (r.p.dirt_share or 0) >= 0.5 else '–')}</td>"
-        f"<td>{fdate(r.p.c.sale_date)}</td></tr>"
-        for i, r in enumerate(rows, 1)
-    ]
+
+    def tr(i, r: Assessment) -> str:
+        return (
+            f"<tr><td>{i}</td><td class=sc>{r.score:.0f}</td><td>{e(r.p.c.house)}</td><td>{e(r.p.c.lot_no)}</td>"
+            f"<td class=nm>{e(r.p.c.display_name)}{' ●' if r.lot_id in new_ids else ''}</td><td>{r.p.c.age if r.p.c.age is not None else ''}</td>"
+            f"<td>{e(r.status)}</td><td>{e(r.p.c.sire)}</td><td>{e(peak_text(r))}</td>"
+            f"<td>{LEVEL_NAME.get(r.dirt_depth, '–') if r.dirt_depth else ('Own' if (r.p.dirt_share or 0) >= 0.5 else '–')}</td>"
+            f"<td>{fdate(r.p.c.sale_date)}</td></tr>"
+        )
+
+    trs = [tr(i, r) for i, r in enumerate(rows, 1)]
     head = (
         "<tr><th>#</th><th>Match</th><th>House</th><th>Lot</th><th>Horse</th><th>Age</th><th>Status</th>"
         "<th>Sire</th><th>Peak / fit</th><th>Dirt</th><th>Sells</th></tr>"
@@ -634,6 +654,18 @@ def build(
         else unraced_page(i, r, r.lot_id in new_ids)
         for i, r in enumerate(rows, 1)
     )
+    if watch:
+        pages += f"""
+<section class="page">
+  <h2>HIT watch <span class="muted small">● new this week</span></h2>
+  <p class="small" style="max-width:165mm">Fillies and mares from the horses-in-training and online sales below the
+  main bar: {WATCH_TEXT} Status and dirt rules as the main list.</p>
+  <table class="rank50">{head}{"".join(tr(f"W{i}", r) for i, r in enumerate(watch, 1))}</table>
+</section>"""
+        pages += "".join(
+            raced_page(f"W{i}", r, r.lot_id in new_ids, silks.get(r.lot_id))
+            for i, r in enumerate(watch, 1)
+        )
     return f"""<!doctype html><html><head><meta charset="utf-8"><title>Gun Runner Mare Prospects</title>
 <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>{CSS}</style></head><body>{cover}{intro}{table}{pages}</body></html>"""

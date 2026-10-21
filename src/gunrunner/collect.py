@@ -48,6 +48,7 @@ class Candidate:
     breeding_status: str
     ref: str
     url: str
+    online: bool = False
 
     @property
     def region(self) -> str:
@@ -106,7 +107,12 @@ def from_lots(catalogues: list[Catalogue], lots_by_id: dict[str, list[Lot]]) -> 
     for cat in catalogues:
         for lot in lots_by_id.get(cat.catalogue_id, []):
             sex = is_female(lot.sex)
-            if not sex or lot.withdrawn or not (lot.sire and lot.dam) or lot.lot_type.upper() in SHARE_TYPES:
+            if (
+                not sex
+                or lot.withdrawn
+                or not (lot.sire and lot.dam)
+                or lot.lot_type.upper() in SHARE_TYPES
+            ):
                 continue
             yob = infer_yob(lot, cat)
             # one horse in two sales: keep the first (the sooner sale)
@@ -117,6 +123,7 @@ def from_lots(catalogues: list[Catalogue], lots_by_id: dict[str, list[Lot]]) -> 
             out.append(
                 Candidate(
                     lot_id=f"{cat.catalogue_id}:{lot.lot_no}",
+                    online=cat.online,
                     sale=cat.name,
                     house=cat.house,
                     sale_country=cat.country,

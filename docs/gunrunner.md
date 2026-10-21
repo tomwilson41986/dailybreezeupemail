@@ -11,6 +11,14 @@ maidens off the track and first-foal mares. Unnamed lots and anything under two 
 dropped before any lookups. Set it to `true` to add foals, yearlings and unraced stock,
 scored on family and forecast distance fit (below).
 
+**HIT watch.** Horses-in-training fillies rarely reach the main bar (Timeform 100 / E 97
+and a best trip of 8-10f): the European HIT catalogues are mostly handicappers and
+milers. Fillies and mares from the HIT and online sales that miss it but rate Timeform
+92+ (E 93+, or black-type placed) with a best trip of 7.5-10.5f, under the same status
+and dirt rules, are listed apart after the main list: their own table, a profile page
+each (ranked W1, W2...), a section in the email, and "HIT watch" in the CSV's List
+column. `score.WATCH_CLASS_MIN` and `score.WATCH_TRIP` set the bar.
+
 ## Pipeline
 
 1. **Lots** (`collect.py`): the Sales Catalogues adapters (`salescatalogues.daily.collect_raw`,

@@ -1,4 +1,5 @@
-"""The CSVs: the prospects, and every filly and mare scored."""
+"""The CSVs: the prospects (the main list, then the HIT watch), and every filly
+and mare scored."""
 
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from gunrunner.score import RACED_MAX, UNRACED_MAX, Assessment
 PARTS = list(RACED_MAX) + [k for k in UNRACED_MAX if k not in RACED_MAX]
 HEADERS = [
     "Rank",
+    "List",
     "Match",
     "Qualifies",
     "Why not",
@@ -68,7 +70,7 @@ HEADERS = [
 ]
 
 
-def row(i: int | None, a: Assessment, new: bool) -> list:
+def row(i: int | str | None, a: Assessment, new: bool) -> list:
     p, c, o = a.p, a.p.c, a.p.own
     fam = p.family
 
@@ -81,6 +83,7 @@ def row(i: int | None, a: Assessment, new: bool) -> list:
     dirt_names = "; ".join(m.name for m in fam.level(depth).dirt_members()[:5]) if depth else ""
     return [
         i,
+        "Main" if a.qualifies else "HIT watch" if a.watch else "",
         a.score,
         "Yes" if a.qualifies else "",
         "; ".join(a.reasons),
@@ -134,10 +137,14 @@ def row(i: int | None, a: Assessment, new: bool) -> list:
     ]
 
 
-def to_csv(rows: list[Assessment], new_ids: set[str], *, ranked: bool) -> str:
+def to_csv(
+    rows: list[Assessment], new_ids: set[str], *, ranked: bool, watch: list[Assessment] = ()
+) -> str:
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(HEADERS)
     for i, a in enumerate(rows, 1):
         w.writerow(row(i if ranked else None, a, a.lot_id in new_ids))
+    for i, a in enumerate(watch, 1):
+        w.writerow(row(f"W{i}" if ranked else None, a, a.lot_id in new_ids))
     return buf.getvalue()

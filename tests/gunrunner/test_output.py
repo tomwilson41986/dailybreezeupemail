@@ -48,7 +48,7 @@ def rows(ww, tmp_path):
 def test_csv(rows):
     text = csvout.to_csv(rows, {"a:2"}, ranked=True)
     lines = text.strip().splitlines()
-    assert lines[0].startswith("Rank,Match,Qualifies") and len(lines) == 3
+    assert lines[0].startswith("Rank,List,Match,Qualifies") and len(lines) == 3
     assert "Queen's Gift" in lines[2] and ",Yes," in lines[2]
     parsed = list(csv.reader(io.StringIO(text)))
     assert {len(r) for r in parsed} == {len(csvout.HEADERS)}
@@ -93,3 +93,18 @@ def test_report_raced_only(rows):
     assert "Fillies and mares with race form" in html and "in training · off the track" in html
     both = report.build(rows, run_date=date(2026, 10, 23), scored=2, sales=[], new_ids=set(), silks={})
     assert "<h3>Unraced</h3>" in both
+
+
+def test_hit_watch_in_csv_report_and_email(rows, tmp_path):
+    main, watcher = rows[0], rows[1]  # the watch is raced fillies
+    watcher.qualifies, watcher.watch = False, True
+    text = csvout.to_csv([main], set(), ranked=True, watch=[watcher])
+    last = list(csv.reader(io.StringIO(text)))[-1]
+    assert last[0] == "W1" and last[1] == "HIT watch"
+    html = report.build([main], run_date=date(2026, 10, 23), scored=2, sales=[], new_ids=set(), silks={},
+                        include_unraced=False, watch=[watcher])
+    assert "<h2>HIT watch" in html and ">W1<" in html and "1 · 1" in html
+    mail = emailer.compose([main], run_date=date(2026, 10, 23), scored=2, new_ids=set(), attachments=[],
+                           watch=[watcher])
+    assert "(1 + 1 HIT watch, 0 new)" in mail.subject
+    assert "HIT watch" in mail.text and "W1." in mail.text and "HIT watch" in mail.html
