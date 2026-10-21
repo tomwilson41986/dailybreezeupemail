@@ -27,7 +27,7 @@ from gunrunner.forecast import Forecast, Forecaster
 from gunrunner.names import key, split_suffix
 from gunrunner.sirelines import pedigree
 from gunrunner.website import Website, parse_best_win
-from gunrunner.worldwide import Worldwide
+from gunrunner.worldwide import Worldwide, best_trip_f
 
 log = logging.getLogger(__name__)
 
@@ -121,6 +121,18 @@ def stakes_from(
     return best
 
 
+def _same_mare(row: dict, c: Candidate) -> bool:
+    """The backend's row is hers, not a namesake's: a female, foaled the same year,
+    or (no year on the row) by the same sire. "Syracuse" by Ribchester (2019)
+    must not take the Timeform 111 of a colt of that name last seen in 2013."""
+    if (row.get("sex") or "").lower() in ("c", "g", "h", "r"):
+        return False
+    born = row.get("foalingYear")
+    if born and c.yob:
+        return born == c.yob
+    return bool(row.get("sire")) and key(row["sire"]) == key(c.sire)
+
+
 class Enricher:
     def __init__(
         self, ww: Worldwide, fc: Forecaster, web: Website, fam: FamilyBuilder, eq: Equibase | None
@@ -153,7 +165,7 @@ class Enricher:
         if c.named:
             b = self.fam.backend(c.name, c.sire)
             mare = b.get("mare")
-            if mare and (not c.yob or not mare.get("foalingYear") or mare["foalingYear"] == c.yob):
+            if mare and _same_mare(mare, c):
                 r = _from_backend(mare)
                 if r:
                     own.merge(r)
@@ -266,6 +278,9 @@ class Enricher:
 
         if own.runs and p.trip is None and own.trip_f:
             p.trip, p.trip_from = own.trip_f, "best run"
+        # a maiden has no winning trip: the trip of her best run, from the worldwide file
+        if own.runs and p.trip is None and w and best_trip_f(w):
+            p.trip, p.trip_from = best_trip_f(w), "best run"
         if p.earnings is None and own.prize_usd:
             p.earnings = own.prize_usd
         p.own = own if own.runs else None

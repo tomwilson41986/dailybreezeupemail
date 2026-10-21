@@ -112,3 +112,14 @@ def test_raced_filly_needs_class_and_trip(enricher):
         enricher.profile(cand(name="Sprint Boy", sire="Into Mischief", dam="Route Queen", yob=2021))
     )
     assert "trip outside 8-10f" in sprint.reasons and not sprint.qualifies
+
+
+def test_backend_namesakes_are_not_hers():
+    from gunrunner.enrich import _same_mare
+
+    syracuse = cand(name="Syracuse", sire="Ribchester (IRE)", yob=2019)
+    colt = {"name": "SYRACUSE", "sire": None, "sex": "c", "foalingYear": None, "best": 111}
+    assert not _same_mare(colt, syracuse)
+    assert not _same_mare({"sex": "f", "foalingYear": 2013, "sire": "RIBCHESTER"}, syracuse)
+    assert _same_mare({"sex": "f", "foalingYear": 2019, "sire": None}, syracuse)
+    assert _same_mare({"sex": "f", "foalingYear": None, "sire": "RIBCHESTER"}, syracuse)
