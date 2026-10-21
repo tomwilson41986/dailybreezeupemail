@@ -94,9 +94,20 @@ def parse_lots(rows: list) -> list[Lot]:
                 dam=(h.get("dam") or "").strip(),
                 dam_sire=(h.get("sire_of_dam") or "").strip(),
                 vendor=(h.get("consignor_name") or h.get("consignor") or "").strip(),
+                yob=_year(h.get("year_of_birth")),
+                covering_sire=(h.get("covering_sire") or "").strip(),
+                lot_type=(h.get("sold_as_code") or "").strip(),
+                withdrawn=bool(h.get("out")),
+                ref=str(h.get("tjc_ref_num") or "").strip(),
             )
         )
     return lots
+
+
+def _year(v) -> int | None:
+    """"03/17/2026" or "2026-03-17" -> 2026."""
+    m = re.search(r"(\d{4})", str(v or ""))
+    return int(m.group(1)) if m else None
 
 
 def fetch_lots(raw: RawSale, session=None) -> list[Lot]:

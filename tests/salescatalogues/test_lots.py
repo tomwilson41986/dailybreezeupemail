@@ -172,3 +172,44 @@ def test_empty_inputs_return_no_lots():
     assert fasigtipton.parse_lots([]) == []
     assert tattersalls.parse_lots("<html></html>") == []
     assert thoroughbid.parse_lots("<html></html>") == []
+
+
+# --- formats the Gun Runner weekly relies on (trimmed from live pages, Oct 2026) ---
+
+def test_tattersalls_foal_rows_split_sire_and_dam():
+    lots = tattersalls.parse_lots(_read("tattersalls_foal_lots.html"))
+    assert [lot.lot_no for lot in lots] == ["201", "202", "203"]
+    filly = lots[1]
+    assert filly.horse_name == ""
+    assert filly.sire == "Bradsell (GB)" and filly.dam == "Swan Band (GB)"
+    assert filly.sex == "Filly" and filly.colour == "Bay"
+    assert filly.vendor == "Paere Dansk Ltd."
+
+
+def test_goffs_breeding_stock_reads_lot_attributes():
+    lots = goffs.parse_lots(_read("goffs_breeding_stock_lots.html"))
+    mare = lots[0]
+    assert mare.horse_name == "Morning Jewel (IRE)"
+    assert mare.sire == "Dalakhani (IRE)" and mare.dam == "Morning Welcome (IRE)"
+    assert mare.dam_sire == "Be My Guest (USA)"
+    assert mare.covering_sire == "Naval Crown (GB)"
+    assert mare.yob == 2012 and mare.sex == "Mare" and mare.lot_type == "MAR"
+    assert mare.vendor == "Middlelane Farm" and mare.colour == "Grey"
+
+
+def test_arqana_breeding_lots_dam_cover_and_product():
+    lots = arqana.parse_lots(_read("arqana_breeding_lots.html"))
+    foal, maiden, mare = lots
+    assert foal.dam == "FRENCH SPIRIT" and foal.lot_type == "Foal"
+    assert maiden.horse_name == "GHOSTED" and maiden.lot_type == "Maiden" and maiden.covering_sire == ""
+    assert mare.covering_sire == "METROPOLITAN" and mare.lot_type == "Jument"
+
+
+def test_keeneland_sale_data_feed():
+    import json
+    lots = {lot.lot_no: lot for lot in keeneland.parse_lots(json.loads(_read("keeneland_sale_data.json")))}
+    assert lots["1"].horse_name == "" and lots["1"].yob == 2026 and lots["1"].lot_type == "Weanling"
+    caviar = lots["4"]
+    assert caviar.horse_name == "American Caviar" and caviar.yob == 2019
+    assert caviar.covering_sire == "Nyquist" and caviar.breeding_status == "PR"
+    assert lots["21"].breeding_status == "NP"

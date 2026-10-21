@@ -102,13 +102,54 @@ _VENDOR_SEL = (
 )
 
 
+_GOFFS_SEX = {"F": "Filly", "M": "Mare", "C": "Colt", "G": "Gelding", "H": "Horse", "R": "Colt"}
+
+
+def _lot_from_data(a) -> Lot | None:
+    """The lot anchor carries the whole record as ``data-*`` attributes (name,
+    sire, dam, damsire, covering sire, year of birth, sex, type, withdrawn)."""
+    lot_no = (a.get("data-lotnumber") or "").strip()
+    if not lot_no or a.get("data-sirename") is None:
+        return None
+    sire = (a.get("data-sirename") or "").strip()
+    dam = (a.get("data-damname") or "").strip()
+    name = (a.get("data-lotname") or "").strip()
+    # Unnamed youngstock are listed as "Sire x Dam"
+    if not name or " x " in name and name.startswith(sire):
+        name = ""
+    yob = (a.get("data-yearofbirth") or "").strip()
+    href = a.get("href") or ""
+    # the colour in words from the visible "Ch.C" cell; the attribute only has a code ("CH")
+    colour_el = a.cssselect(".lot-table__desktop-lot-cell-lot-color")
+    _, colour = split_sex_colour(squash(colour_el[0].text_content())) if colour_el else ("", "")
+    return Lot(
+        lot_no=lot_no,
+        horse_name=name,
+        sex=_GOFFS_SEX.get((a.get("data-sex") or "").strip().upper(), (a.get("data-sex") or "").strip()),
+        colour=colour or (a.get("data-colour") or "").strip(),
+        sire=sire,
+        dam=dam,
+        dam_sire=(a.get("data-damsire") or "").strip(),
+        vendor=(a.get("data-consignor") or "").strip(),
+        yob=int(yob) if yob.isdigit() else None,
+        covering_sire=(a.get("data-coveringsire") or "").strip(),
+        lot_type=(a.get("data-horsetype") or "").strip(),
+        withdrawn=(a.get("data-withdrawn") or "").lower() == "true",
+        url=f"https://www.goffs.com{href}" if href.startswith("/") else href,
+    )
+
+
 def parse_lots(html: str) -> list[Lot]:
-    """Parse the sale page's lot table. Youngstock are unnamed, so each lot is
-    identified by Sire × Dam; the colour+sex token is e.g. "Ch.C". Damsire isn't
-    published in this view."""
+    """Parse the sale page's lot table. Each lot anchor carries its record as
+    ``data-*`` attributes (read first); older pages without them fall back to
+    the visible cells, where youngstock are identified by Sire × Dam."""
     doc = lxml.html.fromstring(html)
     lots: list[Lot] = []
     for a in doc.cssselect("a.lot-table__lot"):
+        from_data = _lot_from_data(a)
+        if from_data is not None:
+            lots.append(from_data)
+            continue
         num = a.cssselect(".lot-table__desktop-lot-cell-lot-number")
         if not num:
             continue
