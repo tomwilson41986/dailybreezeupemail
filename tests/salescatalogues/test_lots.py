@@ -213,3 +213,101 @@ def test_keeneland_sale_data_feed():
     assert caviar.horse_name == "American Caviar" and caviar.yob == 2019
     assert caviar.covering_sire == "Nyquist" and caviar.breeding_status == "PR"
     assert lots["21"].breeding_status == "NP"
+
+
+# --- online sales (trimmed from the live platforms, Oct 2026) ---------------
+
+def test_goffsgo_cards_one_lot_each():
+    lots = goffs.parse_lots(_read("goffsgo_lots.html"))
+    # a lot shown as a card and again in the table counts once
+    assert [lot.lot_no for lot in lots] == ["1", "22", "4", "58"]
+    filly = lots[0]
+    assert filly.horse_name == "" and filly.sex == "Filly" and filly.yob == 2025
+    assert filly.colour == "Bay" and filly.lot_type == "YRL"
+    assert filly.url == "https://www.goffs.com/sale/GoffsGo/GoffsGo-October-Sale/lots/1"
+    assert lots[1].horse_name == "Back Down Under (IRE)" and lots[1].sex == "Mare"
+
+
+def test_goffsgo_sales_dated_and_linked():
+    from datetime import date
+
+    rows = goffs.parse_upcoming(_read("goffsgo_upcoming.html"), ref=date(2026, 10, 21))
+    nov = rows[0]
+    assert nov.name == "GoffsGo November Sale" and nov.online
+    assert nov.start_date == date(2026, 11, 25)      # not the "£49" in the same line
+    assert nov.url == "https://www.goffs.com/sale/GoffsGo/GoffsGo-November-Sale"
+
+
+def test_bbag_online_lots():
+    lots = bbag.parse_lots(_json("bbag_online_lots.json"))
+    # the "01 - " lot prefix dropped
+    assert [lot.horse_name for lot in lots] == ["Aktivist", "Divina Gloria (FR)", "La Santa Monica"]
+    mare = lots[1]
+    assert mare.sex == "Broodmare" and mare.yob == 2017
+    assert mare.sire == "Dabirsim (FR)" and mare.dam_sire == "Exceed and Excel"
+    assert lots[2].covering_sire == "Isfahan (GER)"
+
+
+def test_bbag_finds_the_platform_slug():
+    auctions = _json("bbag_auctions.json")
+    assert bbag.find_slug(auctions, "August Online-Sale 2026") == "bbag-august-online-sale-2026"
+    assert bbag.find_slug(auctions, "Hit Spring Sale 2026 Online") == "bbag-spring-auction-2026-online"
+    assert bbag.find_slug(auctions, "Christmas Online Sale 2025") == "bbag-christmas-online-sale-2025"
+    assert bbag.find_slug(auctions, "Christmas Online Sale 2026") == ""     # not up yet
+
+
+def test_magicmillions_digital_listings():
+    from datetime import date
+
+    from salescatalogues.sources import magicmillions_online
+
+    found = magicmillions_online.auctions(_json("mm_digital_home.json"))
+    assert found[0]["start"] == date(2026, 10, 9) and found[0]["uuid"]
+    lots = magicmillions_online.parse_listings(_json("mm_digital_auction.json"))
+    assert all(lot.sire and lot.dam for lot in lots)          # the dummy lot is skipped
+    by_type = {lot.lot_type: lot for lot in lots}
+    assert set(by_type) == {"SH", "B", "RF", "U"}
+    mare = by_type["B"]
+    assert mare.covering_sire and mare.sex == "M" and mare.yob and mare.dam_sire
+    assert by_type["U"].horse_name == ""                      # "Unnamed"
+    assert mare.url.startswith("https://magicmillions.digital/current-auctions/#!/auctions/")
+
+
+def test_magicmillions_digital_decode():
+    from salescatalogues.sources import magicmillions_online
+
+    d = magicmillions_online.decode("%7B&quot;name&quot;:&quot;Dad&rsquo;s Rules&quot;,&quot;age&quot;:3%7D")
+    assert d == {"name": "Dad’s Rules", "age": 3}
+    assert magicmillions_online.decode("not json") == {}
+
+
+def test_inglis_digital_catalogue():
+    from datetime import date
+
+    from salescatalogues.models import RawSale
+
+    auctions = _json("inglis_digital_auctions.json")
+    raw = RawSale("Inglis", "AUS", "October (Late) Online Sale", date(2026, 10, 16), None,
+                  "https://inglisdigital.com/", online=True)
+    found = inglis.find_auction(auctions, raw)
+    assert found["auctionName"] == "2026 October (Late) Online Sale"
+    early = RawSale("Inglis", "AUS", "October (Early) Online Sale", date(2026, 10, 2), None, "u", online=True)
+    assert inglis.find_auction(auctions, early)["auctionName"] == "2026 October (Early) Online Sale"
+
+    lots = inglis.parse_digital(_json("inglis_digital_catalogue.json"), found["sanitisedAuctionName"])
+    assert len(lots) == 13
+    covered = next(lot for lot in lots if lot.covering_sire)
+    assert covered.lot_type == "B" and covered.yob and covered.sire and covered.dam
+    assert sum(lot.withdrawn for lot in lots) == 4
+    assert lots[0].url == f"https://www.inglisdigital.com/catalogue/auction/{found['sanitisedAuctionName']}/lot/{lots[0].lot_no}"
+
+
+def test_thoroughbid_lots_2026_markup():
+    lots = thoroughbid.parse_lots(_read("thoroughbid_lots_2026.html"))
+    assert [lot.lot_no for lot in lots] == ["1", "8", "14"]
+    filly = lots[0]
+    assert filly.horse_name == "" and filly.sex == "Filly" and filly.yob == 2025
+    assert filly.sire == "Frontiersman (GB)" and filly.dam == "Perfect Promise (IRE)"
+    assert filly.lot_type == "Yearling" and filly.url == "https://www.thoroughbid.co.uk/auction/-2267"
+    assert lots[1].withdrawn and not lots[2].withdrawn
+    assert lots[2].horse_name == "Harrys Hope (IRE)" and lots[2].sex == "Mare" and lots[2].yob == 2018

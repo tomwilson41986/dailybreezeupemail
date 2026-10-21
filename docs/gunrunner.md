@@ -71,8 +71,9 @@ Secrets: `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `EMAIL_FROM` (shared), `PARSE_BOT_A
 
 ## Gaps
 
-- Houses with no lot adapter yet: ThoroughBid, Inglis and Magic Millions online sales,
-  BBAG online, Arqana online. Their sales are listed but no lots come through.
+- Online sales (GoffsGo, ThoroughBid, Arqana online, BBAG online, Inglis Digital, Magic
+  Millions Digital) come through once each catalogue is published, usually a week or so
+  before bidding. Part-shares and breeding rights are skipped.
 - Tattersalls December Mares and Yearlings appear once the catalogues are published.
 - Equibase has no surface or distance: surface from the race name, trip from AuctionEdge
   or the worldwide file.

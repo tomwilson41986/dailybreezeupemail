@@ -5,6 +5,11 @@ Each tile carries the country via its pin image (``IRE``/``UK``), a date span
 (year omitted), a short description (used to spot store/NH sales), and a link
 whose label hints status: "Catalogue >" (catalogue available), "View Sales Day
 Live >" (in progress), or "Sale Info >" / "More Info >" (upcoming).
+
+GoffsGo, the online platform, shows its sales as ``.sale-tile--online`` tiles
+with no link ("25 November - Entries just £49"); each sale's page is
+``/sale/GoffsGo/<name with dashes>``, whose lots are ``goffs-365`` cards
+carrying the same ``data-*`` record as the main lot table.
 """
 from __future__ import annotations
 
@@ -50,8 +55,12 @@ def parse_upcoming(html: str, *, ref: date) -> list[RawSale]:
         country = "UK" if _country_from_tile(tile) == "UK" else "IRE"
         house = "Goffs UK" if country == "UK" else "Goffs"
 
+        online = "sale-tile--online" in (tile.get("class") or "")
         date_el = tile.cssselect(".sale-tile__date-description")
         date_text = squash(date_el[0].text_content()) if date_el else ""
+        if online:
+            # "25 November - Entries just £49": the price would read as a day
+            date_text = date_text.split(" - ")[0]
         start, end = parse_date_range(date_text, ref, dayfirst=True)
 
         desc_el = tile.cssselect(".sale-tile__short-description")
@@ -60,6 +69,8 @@ def parse_upcoming(html: str, *, ref: date) -> list[RawSale]:
         link = tile.cssselect("a.sale-tile__link")
         href = link[0].get("href") if link else ""
         url = href if href.startswith("http") else f"{BASE}{href}" if href else URL
+        if online and not href and name.lower().startswith("goffsgo"):
+            url = f"{BASE}/sale/GoffsGo/{'-'.join(name.split())}"
         label = squash(link[0].text_content()).lower() if link else ""
         if "live" in label or "live" in (tile.get("class") or "").lower():
             status = "live"
@@ -76,7 +87,7 @@ def parse_upcoming(html: str, *, ref: date) -> list[RawSale]:
                 start_date=start,
                 end_date=end,
                 url=url,
-                online=False,
+                online=online,
                 description=description,
                 status_hint=status,
             )
@@ -103,6 +114,9 @@ _VENDOR_SEL = (
 
 
 _GOFFS_SEX = {"F": "Filly", "M": "Mare", "C": "Colt", "G": "Gelding", "H": "Horse", "R": "Colt"}
+# the colour codes on GoffsGo cards, which have no visible colour cell
+_GOFFS_COLOUR = {"B": "Bay", "BR": "Brown", "CH": "Chestnut", "GR": "Grey", "BL": "Black", "RO": "Roan",
+                 "DKB": "Dark Bay", "B/BR": "Bay/Brown", "GR/RO": "Grey/Roan"}
 
 
 def _lot_from_data(a) -> Lot | None:
@@ -126,7 +140,7 @@ def _lot_from_data(a) -> Lot | None:
         lot_no=lot_no,
         horse_name=name,
         sex=_GOFFS_SEX.get((a.get("data-sex") or "").strip().upper(), (a.get("data-sex") or "").strip()),
-        colour=colour or (a.get("data-colour") or "").strip(),
+        colour=colour or _GOFFS_COLOUR.get(code := (a.get("data-colour") or "").strip().upper(), code),
         sire=sire,
         dam=dam,
         dam_sire=(a.get("data-damsire") or "").strip(),
@@ -134,7 +148,7 @@ def _lot_from_data(a) -> Lot | None:
         yob=int(yob) if yob.isdigit() else None,
         covering_sire=(a.get("data-coveringsire") or "").strip(),
         lot_type=(a.get("data-horsetype") or "").strip(),
-        withdrawn=(a.get("data-withdrawn") or "").lower() == "true",
+        withdrawn="true" in ((a.get("data-withdrawn") or "") + (a.get("data-iswithdrawn") or "")).lower(),
         url=f"https://www.goffs.com{href}" if href.startswith("/") else href,
     )
 
@@ -145,10 +159,16 @@ def parse_lots(html: str) -> list[Lot]:
     the visible cells, where youngstock are identified by Sire × Dam."""
     doc = lxml.html.fromstring(html)
     lots: list[Lot] = []
-    for a in doc.cssselect("a.lot-table__lot"):
+    seen: set[str] = set()
+    # GoffsGo pages render each lot as a card as well as a table row: one each
+    for a in doc.cssselect("a.lot-table__lot, a.goffs-365-catalogue__card"):
         from_data = _lot_from_data(a)
         if from_data is not None:
-            lots.append(from_data)
+            if from_data.lot_no not in seen:
+                seen.add(from_data.lot_no)
+                lots.append(from_data)
+            continue
+        if "goffs-365-catalogue__card" in (a.get("class") or ""):
             continue
         num = a.cssselect(".lot-table__desktop-lot-cell-lot-number")
         if not num:

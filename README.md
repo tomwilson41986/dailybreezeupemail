@@ -142,8 +142,11 @@ headings and per-sale-type icons), with the full list attached as a CSV.
   catalogue is published. Each source has a `fetch_lots` adapter hitting that
   house's catalogue API/page (Tattersalls' 4D listing, Goffs' sale page,
   Arqana's lot grid, OBS/Keeneland/Fasig-Tipton/Gavelhouse/BBAG JSON APIs,
-  Inglis/Magic Millions/NZB/ThoroughBid tables). Sales without a published
-  catalogue (or behind auth, e.g. Inglis Digital) fall back to a single summary
+  Inglis/Magic Millions/NZB/ThoroughBid tables). Online sales come through the
+  same way: GoffsGo's lot cards, Arqana online's catalogue page, BBAG's
+  3forONE auction list, Inglis Digital's Pegasus catalogue and Magic Millions
+  Digital's BidJS listings (part-shares and breeding rights are tagged in the
+  lot type). Sales without a published catalogue fall back to a single summary
   row. Damsire isn't published by every house. Only sales within `HORIZON_DAYS`
   are listed.
 
