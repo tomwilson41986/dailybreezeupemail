@@ -178,6 +178,20 @@ The parsers are tested offline against captured page snapshots in
 fails loudly in `tests/salescatalogues/test_sources.py` rather than silently
 emptying the digest.
 
+## Gun Runner Mare Prospects (`gunrunner-weekly`)
+
+A Friday email: every filly and mare catalogued worldwide for a sale in the
+next ten weeks, scored out of 100 as a Gun Runner mate. Lots come through the
+Sales Catalogues adapters above; each horse is enriched from the desk's sale
+data, Equibase (parse.bot), the backend results table and the worldwide file,
+with her family to the third dam and, unraced, a forecast of her trip. The PDF
+(one page per prospect, Winchell style) and the CSVs are attached.
+
+`.github/workflows/gunrunner-weekly.yml` sends at 07:00 London on Fridays, with
+a cache-filling run on Wednesdays. Recipients default to racingsquared@gmail.com
+and greg@p2bloodstock.com (`GUNRUNNER_EMAIL_TO` overrides). Details in
+[`docs/gunrunner.md`](docs/gunrunner.md).
+
 ## Wathnan runners report (`wathnan-daily`)
 
 A third digest, unrelated to the breeze-up cohort: the daily **TOMORROW'S

@@ -33,3 +33,5 @@ data/catalogues_preview.csv
 data/salescatalogues.sqlite
 data/salescatalogues.sqlite-shm
 data/salescatalogues.sqlite-wal
+# Gun Runner weekly: the worldwide file, the enrichment cache and each run's output
+data/gunrunner/
