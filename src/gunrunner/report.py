@@ -231,7 +231,7 @@ def case(a: Assessment) -> list[str]:
     """Her case in short lines."""
     p = a.p
     out = [
-        f"By {p.c.sire}. {p.ped['line']} line, {p.ped['rate'] * 100:.0f}% SW/runners with Gun Runner."
+        f"By {p.c.sire.rstrip('.')}. {p.ped['line']} line, {p.ped['rate'] * 100:.0f}% SW/runners with Gun Runner."
     ]
     if p.raced:
         o = p.own
@@ -543,6 +543,17 @@ table {{ border-collapse: collapse; width: 100%; }}
 """
 
 
+UNRACED_RULES = """  <h3>Unraced</h3>
+  <table class="model">
+    <tr><td>Pedigree</td><td class=w>25</td><td>As raced.</td></tr>
+    <tr><td>Family class</td><td class=w>25</td><td>Best runner under the dam, 2nd dam, 3rd dam. Weighted 1 / 0.6 / 0.35.</td></tr>
+    <tr><td>Family dirt</td><td class=w>20</td><td>Nearest dirt form. Dirt black-type winner full marks. Weighted 1 / 0.75 / 0.55.</td></tr>
+    <tr><td>Distance fit</td><td class=w>20</td><td>Forecast share of wins at 8–10f, from sire and dam. 20% nil, 45% full marks; all winners 24%.</td></tr>
+    <tr><td>Family produce</td><td class=w>10</td><td>Dam's winners and stakes winners.</td></tr>
+  </table>
+"""
+
+
 def build(
     rows: list[Assessment],
     *,
@@ -551,19 +562,27 @@ def build(
     sales: list[dict],
     new_ids: set[str],
     silks: dict[str, dict],
+    include_unraced: bool = True,
 ) -> str:
     raced = sum(1 for r in rows if r.track == "raced")
+    in_training = sum(1 for r in rows if r.status == "In training")
     n_new = sum(1 for r in rows if r.lot_id in new_ids)
     houses = sorted({s["house"] for s in sales if s.get("females")})
+    unraced_rules = UNRACED_RULES if include_unraced else ""
+    unraced_qualify = (
+        f"<tr><td>Unraced</td><td class=w></td><td>Distance fit {FIT_MIN:.0%}+. Match {UNRACED_MIN}+.</td></tr>"
+        if include_unraced
+        else ""
+    )
     cover = f"""
 <section class="page cover">
   <div class="top"><div class="kick">Gun Runner · Weekly · {run_date:%-d %B %Y}</div><img class="mark" src="{_asset("winchell_silk.png")}"></div>
   <div>
     <h1>Gun Runner<br>Mare Prospects</h1>
-    <div class="lede">Fillies and mares catalogued worldwide in the next ten weeks that best fit Gun Runner. {e(", ".join(houses))}.</div>
+    <div class="lede">{"Fillies and mares" if include_unraced else "Fillies and mares with race form"} catalogued worldwide in the next ten weeks that best fit Gun Runner. {e(", ".join(houses))}.</div>
   </div>
-  <div class="foot"><div><b>{scored:,}</b>fillies and mares scored</div><div><b>{len(rows)}</b>prospects</div>
-    <div><b>{raced} · {len(rows) - raced}</b>raced · unraced</div><div><b>{n_new}</b>new this week</div></div>
+  <div class="foot"><div><b>{scored:,}</b>{"fillies and mares" if include_unraced else "raced fillies and mares"} scored</div><div><b>{len(rows)}</b>prospects</div>
+    {f'<div><b>{raced} · {len(rows) - raced}</b>raced · unraced</div>' if include_unraced else f'<div><b>{in_training} · {len(rows) - in_training}</b>in training · off the track</div>'}<div><b>{n_new}</b>new this week</div></div>
 </section>"""
     intro = f"""
 <section class="page intro">
@@ -578,20 +597,12 @@ def build(
     <tr><td>Earnings</td><td class=w>10</td><td>$400k+ full marks.</td></tr>
     <tr><td>Speed</td><td class=w>5</td><td>Best Thoro-Graph. Not held: the rest scaled to 100.</td></tr>
   </table>
-  <h3>Unraced</h3>
-  <table class="model">
-    <tr><td>Pedigree</td><td class=w>25</td><td>As raced.</td></tr>
-    <tr><td>Family class</td><td class=w>25</td><td>Best runner under the dam, 2nd dam, 3rd dam. Weighted 1 / 0.6 / 0.35.</td></tr>
-    <tr><td>Family dirt</td><td class=w>20</td><td>Nearest dirt form. Dirt black-type winner full marks. Weighted 1 / 0.75 / 0.55.</td></tr>
-    <tr><td>Distance fit</td><td class=w>20</td><td>Forecast share of wins at 8–10f, from sire and dam. 20% nil, 45% full marks; all winners 24%.</td></tr>
-    <tr><td>Family produce</td><td class=w>10</td><td>Dam's winners and stakes winners.</td></tr>
-  </table>
-  <h3>To qualify</h3>
+{unraced_rules}  <h3>To qualify</h3>
   <table class="model">
     <tr><td>Raced</td><td class=w></td><td>Class {CLASS_MIN}/25 or better (E 97). Best win or peak run 8–10f.</td></tr>
-    <tr><td>Unraced</td><td class=w></td><td>Distance fit {FIT_MIN:.0%}+. Match {UNRACED_MIN}+.</td></tr>
-    <tr><td>Dirt</td><td class=w></td><td>US: her own dirt form, or the dam's (unraced). Europe and Australasia: dirt form anywhere to the 3rd dam.</td></tr>
-    <tr><td>Status</td><td class=w></td><td>Foals, yearlings, 2yos, fillies in training, maidens: all. Covered: first foal only, by {e(", ".join(COVER_SIRES))}. No experienced mares.</td></tr>
+    {unraced_qualify}
+    <tr><td>Dirt</td><td class=w></td><td>US: her own dirt form{", or the dam's (unraced)" if include_unraced else ""}. Europe and Australasia: dirt form anywhere to the 3rd dam.</td></tr>
+    <tr><td>Status</td><td class=w></td><td>{"Foals, yearlings, 2yos, fillies in training, maidens: all" if include_unraced else "Raced only. Fillies in training and mares off the track: all"}. Covered: first foal only, by {e(", ".join(COVER_SIRES))}. No experienced mares.</td></tr>
     <tr><td>Out</td><td class=w></td><td>Gun Runner's daughters. Candy Ride-line sires lose 5.</td></tr>
   </table>
   <h3>Match scores</h3>

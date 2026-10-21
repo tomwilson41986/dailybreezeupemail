@@ -25,7 +25,7 @@ import requests
 
 from gunrunner import csvout, emailer, pdf, report, silks, worldwide
 from gunrunner.cache import Cache
-from gunrunner.collect import US, collect
+from gunrunner.collect import US, collect, could_have_raced
 from gunrunner.config import load
 from gunrunner.enrich import Enricher
 from gunrunner.equibase import Equibase
@@ -40,13 +40,15 @@ WORLDWIDE_MAX_AGE = 30 * 86400
 PDF_LIMIT = 22_000_000  # Gmail takes 25 MB, encoded
 
 
-def _worth_equibase(a: Assessment) -> bool:
+def _worth_equibase(a: Assessment, include_unraced: bool) -> bool:
     """A US filly the Equibase lookup could put on the list."""
     p = a.p
     if not a.eligible or p.c.region != US:
         return False
     if a.track == "raced":
         return not p.runs and (p.trip is None or TRIP[0] - 1 <= p.trip <= TRIP[1])
+    if not include_unraced:
+        return False
     d = p.family.dam
     fit = p.forecast.fit if p.forecast else 0
     return (d is None or not d.dirt_known) and fit >= FIT_MIN and a.score >= UNRACED_MIN - 15
@@ -89,6 +91,9 @@ def run(
     web = Website(st.website, plain, cache, st.website_sales)
     web.load()
     en = Enricher(ww, Forecaster(ww), web, FamilyBuilder(st.family_api, plain, cache, ww, eq), eq)
+    if not st.gunrunner_include_unraced:
+        cands = [c for c in cands if could_have_raced(c)]
+        log.info("with a chance of race form: %d", len(cands))
     en.prefetch(cands)
     scored = [assess(en.profile(c)) for c in cands]
     log.info("scored %d in %.0fs", len(scored), time.time() - t0)
@@ -97,7 +102,7 @@ def run(
     if eq is not None:
         spent_on = 0
         for i in sorted(
-            (i for i, a in enumerate(scored) if _worth_equibase(a)), key=lambda i: -scored[i].score
+            (i for i, a in enumerate(scored) if _worth_equibase(a, st.gunrunner_include_unraced)), key=lambda i: -scored[i].score
         ):
             if not eq.can_spend:
                 break
@@ -112,6 +117,9 @@ def run(
     if warm:
         log.info("warm run: caches filled in %.0fs", time.time() - t0)
         return 0
+    if not st.gunrunner_include_unraced:
+        scored = [a for a in scored if a.track == "raced"]
+        log.info("with race form: %d", len(scored))
 
     rows = sorted(
         (a for a in scored if a.qualifies), key=lambda a: (-a.score, a.p.c.sale_date or date.max)
@@ -148,6 +156,7 @@ def run(
             sales=meta["sales"],
             new_ids=new_ids,
             silks=silk,
+            include_unraced=st.gunrunner_include_unraced,
         )
         pdf_p = pdf.render(html, out / f"Gun Runner Mare Prospects {stamp}.pdf")
         if pdf_p.stat().st_size <= PDF_LIMIT:
@@ -159,7 +168,12 @@ def run(
     attachments += [csv_p, csv_all]
 
     mail = emailer.compose(
-        rows, run_date=today, scored=len(scored), new_ids=new_ids, attachments=attachments
+        rows,
+        run_date=today,
+        scored=len(scored),
+        new_ids=new_ids,
+        attachments=attachments,
+        pool="fillies and mares" if st.gunrunner_include_unraced else "raced fillies and mares",
     )
     (out / "email.html").write_text(mail.html, encoding="utf-8")
     (out / "email.txt").write_text(mail.text, encoding="utf-8")

@@ -83,3 +83,13 @@ def test_email_attachments(rows, tmp_path):
     names = [p.get_filename() for p in msg.iter_attachments()]
     assert names == [pdf.name, "prospects.csv"]
     assert msg["To"] == "a@example.com, b@example.com"
+
+
+def test_report_raced_only(rows):
+    raced = [r for r in rows if r.track == "raced"]
+    html = report.build(raced, run_date=date(2026, 10, 23), scored=1, sales=[], new_ids=set(), silks={},
+                        include_unraced=False)
+    assert "<h3>Unraced</h3>" not in html and "Distance fit 33%+" not in html
+    assert "Fillies and mares with race form" in html and "in training · off the track" in html
+    both = report.build(rows, run_date=date(2026, 10, 23), scored=2, sales=[], new_ids=set(), silks={})
+    assert "<h3>Unraced</h3>" in both

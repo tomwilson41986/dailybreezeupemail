@@ -48,6 +48,9 @@ def prof(**kw) -> Profile:
             True,
         ),
         (dict(yob=2022, sex="M", name="Fresh Mare"), "Maiden", True),
+    # off the track, not covered: the website's firstCover=False isn't produce
+    (dict(yob=2022, sex="M", name="Fresh Mare", first_cover=False), "Maiden", True),
+    (dict(yob=2021, sex="M", covering_sire="Curlin", name="Mum", first_cover=False), "Experienced mare", False),
     ],
 )
 def test_status(kw, status, ok):

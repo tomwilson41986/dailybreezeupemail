@@ -1,6 +1,6 @@
 from datetime import date
 
-from gunrunner.collect import from_lots, infer_yob, is_female
+from gunrunner.collect import could_have_raced, from_lots, infer_yob, is_female
 from salescatalogues.models import Catalogue, Lot, RawSale
 
 
@@ -55,3 +55,12 @@ def test_from_lots_keeps_fillies_and_mares_once():
         and out[0].display_name == "Tapit – Route Queen"
         and out[0].region == "EU"
     )
+
+
+def test_could_have_raced():
+    from .helpers import cand
+
+    assert could_have_raced(cand(name="Her Laugh", yob=2022))
+    assert could_have_raced(cand(name="Old Mare", yob=None))
+    assert not could_have_raced(cand(name="", yob=2022))          # unnamed: no record to find
+    assert not could_have_raced(cand(name="Yearling Name", yob=2025))

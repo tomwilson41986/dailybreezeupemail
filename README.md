@@ -183,8 +183,10 @@ emptying the digest.
 
 ## Gun Runner Mare Prospects (`gunrunner-weekly`)
 
-A Friday email: every filly and mare catalogued worldwide for a sale in the
-next ten weeks, scored out of 100 as a Gun Runner mate. Lots come through the
+A Friday email: every filly and mare with race form catalogued worldwide for a
+sale in the next ten weeks (horses in training, maidens off the track, first-foal
+mares), scored out of 100 as a Gun Runner mate. Unraced stock can be switched on
+with the `GUNRUNNER_INCLUDE_UNRACED` repo variable. Lots come through the
 Sales Catalogues adapters above; each horse is enriched from the desk's sale
 data, Equibase (parse.bot), the backend results table and the worldwide file,
 with her family to the third dam and, unraced, a forecast of her trip. The PDF

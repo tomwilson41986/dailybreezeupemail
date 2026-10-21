@@ -51,6 +51,9 @@ jobs:
       GUNRUNNER_EMAIL_TO: ${{ secrets.GUNRUNNER_EMAIL_TO }}
       PARSE_BOT_API_KEY:  ${{ secrets.PARSE_BOT_API_KEY }}
       GUNRUNNER_EQUIBASE_CREDITS: ${{ vars.GUNRUNNER_EQUIBASE_CREDITS || '1500' }}
+      # raced fillies and mares only to start; set the repo variable to "true" to
+      # add foals, yearlings and unraced stock (scored on family and forecast fit)
+      GUNRUNNER_INCLUDE_UNRACED: ${{ vars.GUNRUNNER_INCLUDE_UNRACED || 'false' }}
 
     steps:
       - name: Friday 07:00 London guard

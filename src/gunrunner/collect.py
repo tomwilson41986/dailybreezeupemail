@@ -71,6 +71,12 @@ class Candidate:
         return bool(self.name)
 
 
+def could_have_raced(c: Candidate) -> bool:
+    """Named and two or older (or age unknown): foals, yearlings and unnamed lots
+    have no race record to find."""
+    return c.named and (c.age is None or c.age >= 2)
+
+
 def is_female(sex: str) -> str:
     s = (sex or "").strip().upper()
     if s in FEMALE or s.startswith(("FILL", "MARE", "BROODMARE")):

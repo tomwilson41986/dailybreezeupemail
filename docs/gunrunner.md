@@ -5,6 +5,12 @@ ten weeks, scored out of 100 as a Gun Runner mate. Attached: the PDF (cover,
 rules, ranked list, one page per prospect) and two CSVs (the prospects; every
 filly and mare scored, with why each one missed).
 
+**Raced only, to start.** `GUNRUNNER_INCLUDE_UNRACED` (repo variable, default `false`)
+keeps the email to fillies and mares with race form: horses in training (HIT sales),
+maidens off the track and first-foal mares. Unnamed lots and anything under two are
+dropped before any lookups. Set it to `true` to add foals, yearlings and unraced stock,
+scored on family and forecast distance fit (below).
+
 ## Pipeline
 
 1. **Lots** (`collect.py`): the Sales Catalogues adapters (`salescatalogues.daily.collect_raw`,

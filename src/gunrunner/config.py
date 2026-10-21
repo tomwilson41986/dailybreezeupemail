@@ -38,6 +38,9 @@ class Settings(BaseSettings):
 
     # sales selling within this many days are covered
     gunrunner_horizon_days: int = 70
+    # off: only fillies and mares with race form (in training, off the track,
+    # first-foal mares); on: foals, yearlings and unraced stock too
+    gunrunner_include_unraced: bool = False
     website: str = "https://www.blandfordbloodstock.tech"
     # the site's sale data folders, kind:slug, comma-separated
     gunrunner_website_sales: str = (

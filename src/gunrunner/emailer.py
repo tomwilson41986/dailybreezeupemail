@@ -34,13 +34,14 @@ def compose(
     scored: int,
     new_ids: set[str],
     attachments: list[Path],
+    pool: str = "fillies and mares",
 ) -> Email:
     n_new = sum(1 for r in rows if r.lot_id in new_ids)
     subject = f"Gun Runner Mare Prospects — {run_date:%a %-d %b %Y} ({len(rows)}, {n_new} new)"
     top = rows[:10]
     lines = [
         f"GUN RUNNER MARE PROSPECTS — {run_date:%A %-d %B %Y}",
-        f"{len(rows)} prospects from {scored:,} fillies and mares. {n_new} new this week.",
+        f"{len(rows)} prospects from {scored:,} {pool}. {n_new} new this week.",
         "",
         "Top 10",
     ]
@@ -71,7 +72,7 @@ def compose(
     body = f"""<div style="font-family:Arial,sans-serif;color:#1D1D1F;max-width:720px">
 <div style="background:{MAROON};color:#fff;padding:14px 18px"><div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;opacity:.85">Weekly · {run_date:%-d %B %Y}</div>
 <div style="font-size:24px;font-weight:600">Gun Runner Mare Prospects</div></div>
-<p style="font-size:14px">{len(rows)} prospects from {scored:,} fillies and mares. {n_new} new this week.</p>
+<p style="font-size:14px">{len(rows)} prospects from {scored:,} {pool}. {n_new} new this week.</p>
 <table style="border-collapse:collapse;width:100%">
 <tr style="background:{MAROON};color:#fff;font-size:12px;text-align:left"><th style="padding:4px 6px">#</th><th>Match</th><th>Horse</th><th>Lot</th><th>Status</th><th>Sire</th><th>Peak / fit</th></tr>
 {trs}

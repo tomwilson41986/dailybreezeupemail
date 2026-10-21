@@ -82,7 +82,9 @@ def status_of(p: Profile) -> tuple[str, bool]:
         return "By Gun Runner", False
     age = c.age
     covered = bool(c.covering_sire)
-    has_produce = bool(p.produce) or p.first_cover is False
+    # the website's firstCover is false for a maiden too: it says "produce"
+    # only of a covered mare
+    has_produce = bool(p.produce) or (covered and p.first_cover is False)
     if covered:
         if key(c.covering_sire) not in _COVERS:
             return f"Covered by {c.covering_sire}", False

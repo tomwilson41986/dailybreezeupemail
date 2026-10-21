@@ -24,7 +24,7 @@ from gunrunner.family import (
     from_worldwide,
 )
 from gunrunner.forecast import Forecast, Forecaster
-from gunrunner.names import key
+from gunrunner.names import key, split_suffix
 from gunrunner.sirelines import pedigree
 from gunrunner.website import Website, parse_best_win
 from gunrunner.worldwide import Worldwide
@@ -158,10 +158,15 @@ class Enricher:
                 if r:
                     own.merge(r)
                     p.sources.append("results")
-                kids = [h for h in (b.get("produce") or {}).get("horses") or []] + [
-                    h for h in (b.get("worldwide") or {}).get("produce") or []
+                # the results table's produce, foaled after she could breed: a
+                # namesake's foals (Clicquot, 2022: "her" 1997 and 2014 foals) drop out
+                born = c.yob or mare.get("foalingYear")
+                kids = [
+                    h
+                    for h in (b.get("produce") or {}).get("horses") or []
+                    if h.get("name") and (not born or (h.get("foalingYear") or 0) >= born + 3)
                 ]
-                p.produce = len({key(h["name"]) for h in kids if h.get("name")})
+                p.produce = len({key(h["name"]) for h in kids})
         # the worldwide file
         w = self.ww.horse(c.name, yob=c.yob, sire=c.sire) if c.named else None
         if w and (not c.sire or key(w.get("sire") or "") == key(c.sire)):
@@ -171,10 +176,15 @@ class Enricher:
                 p.dirt_share, p.dirt_from = own.dirt_runs / max(1, w["runs"]), "worldwide file"
                 if own.trip_f:
                     p.trip, p.trip_from = own.trip_f, "winning trips"
+            # foaled after she could breed, out of a mare of her country (the
+            # file's dam carries a suffix: a New Zealand namesake's foal isn't hers)
             kids = [
                 h
                 for h in self.ww.produce(c.name)
-                if c.yob and h.get("yob") and h["yob"] >= c.yob + 3
+                if c.yob
+                and h.get("yob")
+                and h["yob"] >= c.yob + 3
+                and split_suffix(h.get("dam") or "")[1] in ("", w.get("country"))
             ]
             if kids:
                 p.produce = max(p.produce or 0, len(kids))
@@ -191,11 +201,17 @@ class Enricher:
             p.best_win = bms.get("aeBestWin") or ""
             bw = parse_best_win(p.best_win)
             if bms.get("awd"):
-                p.trip, p.trip_from = float(bms["awd"]), bms.get("awdFrom") or "best win"
+                # awdFrom: "pps" when the trip is her peak run's in the past performances
+                frm = bms.get("awdFrom") or "best win"
+                p.trip, p.trip_from = float(bms["awd"]), "peak run" if frm == "pps" else frm
             elif bw:
                 p.trip, p.trip_from = bw["furlongs"], "best win"
-            if bms.get("produceCount") is not None:
-                p.produce = max(p.produce or 0, bms["produceCount"] or 0, bms.get("aeProduce") or 0)
+            # the catalogue and AuctionEdge know her produce: they override the
+            # name-matched counts above
+            if bms.get("produceCount") is not None or bms.get("aeProduce") is not None:
+                p.produce = max(bms.get("produceCount") or 0, bms.get("aeProduce") or 0)
+            # firstCover: true for a mare carrying her first foal; false for one
+            # with produce, and for a maiden who isn't covered
             p.first_cover = bms.get("firstCover")
             p.links.update({k: v for k, v in (bms.get("urls") or {}).items() if v})
             p.trainer = bms.get("trainer") or ""
