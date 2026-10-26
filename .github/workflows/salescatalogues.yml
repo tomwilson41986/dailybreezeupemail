@@ -1,18 +1,25 @@
-name: daily-sales-catalogues
+name: weekly-sales-catalogues
 
-# One scheduled run per day plus manual dispatch.
-#   06:00 UTC - build the Daily Sales Catalogues digest: every New and Active
+# One scheduled run per week plus manual dispatch.
+#   06:00 UTC Monday - build the Sales Catalogues digest: every New and Active
 #               thoroughbred sale catalogue worldwide, grouped by country, with
 #               the full list attached as CSV. Jumps / National Hunt / store
 #               sales are excluded. Suppressed when empty unless
 #               notify_on_empty=true.
+#
+# 26 Oct 2026: moved from daily (06:00 UTC every day) to weekly at the owner's
+# request. "New" is still judged against the seen-catalogue ledger, so a
+# catalogue published midweek is New in the next Monday digest. The Active
+# lead defaults to 7 days here (the code's own default is 2) so every sale
+# starting before the next digest is flagged Active; a CATALOGUES_ACTIVE_LEAD_DAYS
+# repo variable still overrides it.
 #
 # The job scrapes a dozen auction-house sites. As with the breeze-up job it uses
 # curl_cffi (impersonate=chrome124) so cloud-IP runs aren't bot-blocked; per-
 # source failures are isolated so one broken site never sinks the whole digest.
 on:
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "0 6 * * 1"
   workflow_dispatch:
     inputs:
       date:
@@ -42,7 +49,7 @@ jobs:
         ${{ github.event.inputs.notify_on_empty
             || vars.CATALOGUES_NOTIFY_ON_EMPTY
             || 'false' }}
-      ACTIVE_LEAD_DAYS: ${{ vars.CATALOGUES_ACTIVE_LEAD_DAYS || '2' }}
+      ACTIVE_LEAD_DAYS: ${{ vars.CATALOGUES_ACTIVE_LEAD_DAYS || '7' }}
       HORIZON_DAYS:     ${{ vars.CATALOGUES_HORIZON_DAYS || '30' }}
 
     steps:
@@ -71,7 +78,7 @@ jobs:
           restore-keys: |
             salescatalogues-db-v1-
 
-      - name: Run daily job
+      - name: Run the digest
         run: |
           args=""
           if [ -n "${{ github.event.inputs.date }}" ]; then args="$args --date ${{ github.event.inputs.date }}"; fi
@@ -82,7 +89,7 @@ jobs:
         if: always()
         run: |
           {
-            echo "## Daily Sales Catalogues"
+            echo "## Weekly Sales Catalogues"
             echo ""
             echo "- date: \`${{ github.event.inputs.date || 'today UK' }}\`"
             echo "- dry_run: \`${{ github.event.inputs.dry_run || 'false' }}\`"
