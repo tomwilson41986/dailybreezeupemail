@@ -1,22 +1,17 @@
 name: daily-breezeup-email
 
-# Two scheduled runs per day plus manual dispatch:
-#   04:00 UTC - morning run (--mode morning): entries & declarations in the
-#               next 3 days. 04:00 UTC = 05:00 BST / 04:00 GMT. Off-the-hour
-#               avoidance isn't applied because GHA cron throttling primarily
-#               bites at the top of business hours; 04:00 UTC is quiet.
-#               Suppressed when empty unless notify_on_empty=true.
-#   21:00 UTC - evening run (--mode evening): results that ran today. Always
-#               sends, even on a quiet day (subject: "No Results Today").
-#               The day it reports on is anchored to this 21:00 slot, not to
-#               the wall clock when the runner starts — see the 6 Aug 2026
-#               note below and dailybreezeup.daily._results_run_date.
+# One scheduled run per week plus manual dispatch:
 #   21:30 UTC Friday - weekly run (--mode weekly): the week's results +
 #               season-to-date summary with the racing-results workbook
 #               attached, sent to the weekly-only recipients (WEEKLY_EMAIL_TO,
-#               default tom.biggs — he gets this instead of the dailies).
-#               Runs after the Friday evening job so the archive already has
-#               today's results.
+#               default tom.biggs). The weekly run scrapes the week's results
+#               itself and self-heals older gaps, so it does not depend on the
+#               daily runs below.
+#
+# 26 Oct 2026: the daily entries (04:00 UTC, --mode morning) and results
+# (21:00 UTC, --mode evening) emails were stopped at the owner's request. Both
+# modes still work from workflow_dispatch (pick `mode`); to bring either back,
+# re-add its cron here and the matching branch of RUN_MODE below.
 #
 # 28 Apr 2026: the previous cron attempt failed because the default
 # `requests` library exposes a Python TLS fingerprint that Racing Post's
@@ -38,8 +33,6 @@ name: daily-breezeup-email
 # / WEEKLY_SLOT_UTC in src/dailybreezeup/daily.py to match.
 on:
   schedule:
-    - cron: "0 4 * * *"
-    - cron: "0 21 * * *"
     - cron: "30 21 * * 5"
   workflow_dispatch:
     inputs:
@@ -94,11 +87,11 @@ jobs:
       CATALOGUE_ENTRIES_WINDOW_DAYS: >-
         ${{ vars.CATALOGUE_ENTRIES_WINDOW_DAYS || '7' }}
       # Schedule cron's `schedule` event has no inputs, so derive mode from
-      # the cron expression. workflow_dispatch can override via the input.
+      # the cron expression (only the Friday weekly cron is scheduled now).
+      # workflow_dispatch can override via the input; a blank input means morning.
       RUN_MODE: >-
         ${{ github.event.inputs.mode
             || (github.event.schedule == '30 21 * * 5' && 'weekly')
-            || (github.event.schedule == '0 21 * * *' && 'evening')
             || 'morning' }}
       # Weekly-summary recipients (they get the Friday email instead of the
       # dailies). Blank falls back to the in-repo default.

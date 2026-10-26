@@ -3,6 +3,9 @@ name: barrier-trial-tracker
 # Tracks a watchlist of barrier-trial horses (Google Sheet of names + ratings)
 # on Racing Post. Independent of the breeze-up job — its own DB, sheet and
 # recipients — but shares the Gmail SMTP secrets.
+#
+# 26 Oct 2026: the scheduled emails were stopped at the owner's request. Until
+# then the job ran twice a day:
 #   04:00 UTC - morning run (--mode morning): entries & declarations in the
 #               next few days. Suppressed when empty unless notify_on_empty=true.
 #   21:00 UTC - evening run (--mode evening): results that ran today. Always
@@ -12,16 +15,16 @@ name: barrier-trial-tracker
 #               and on 6 Aug 2026 this slot ran ~4 hours late, starting at
 #               00:58 UTC on the 7th, so the job asked RP for a day that hadn't
 #               been raced. See barriertrials.daily._results_run_date — and if
-#               this cron time is edited, update EVENING_SLOT_UTC to match.
+#               the evening cron is restored at another time, update
+#               EVENING_SLOT_UTC to match.
+# Both modes still run from workflow_dispatch (pick `mode`); to bring the
+# emails back, re-add the two crons under `schedule:` below.
 #
 # Matching is name-first: a horse's Racing Post uid is learned the first time it
 # appears on a racecard/result and reused thereafter. RP's Fastly bot filter
 # rejects the default requests TLS fingerprint from CI IPs, so the scrapers use
 # curl_cffi (impersonate=chrome124) — see the breeze-up workflow for history.
 on:
-  schedule:
-    - cron: "0 4 * * *"
-    - cron: "0 21 * * *"
   workflow_dispatch:
     inputs:
       date:

@@ -1,10 +1,10 @@
 # Daily Breeze-Up Email
 
-Two scheduled emails per day listing breeze-up sale graduates, plus a Friday weekly digest:
+A Friday weekly digest of breeze-up sale graduates, plus two daily modes that still run on demand (their schedules were stopped on 26 Oct 2026 at the owner's request):
 
-- **Morning (04:00 UTC / 05:00 BST)** — `--mode morning`: entries & declarations for lots running in the next 3 days. Suppressed when empty unless `NOTIFY_ON_EMPTY=true`.
-- **Evening (21:00 UTC)** — `--mode evening`: results for lots that ran today. Always sent — quiet days get a "No Results Today" notice. "Today" is the day of the 21:00 slot, not the wall clock when the runner starts — GitHub Actions cron is best-effort and a start delayed past UK midnight would otherwise report on a day that hasn't been raced (see `_results_run_date`).
-- **Weekly (21:30 UTC Friday)** — `--mode weekly`: the week's results + the season-to-date tables, with the racing-results workbook attached (see below). Sent only to `WEEKLY_EMAIL_TO` (default tom.biggs, who gets this **instead of** the dailies — he's deliberately not in the daily recipient list).
+- **Weekly (21:30 UTC Friday)** — `--mode weekly`: the week's results + the season-to-date tables, with the racing-results workbook attached (see below). Sent only to `WEEKLY_EMAIL_TO` (default tom.biggs). The weekly run scrapes the week's results itself, so it does not depend on the evening run.
+- **Morning (manual only; was 04:00 UTC / 05:00 BST)** — `--mode morning`: entries & declarations for lots running in the next 3 days. Suppressed when empty unless `NOTIFY_ON_EMPTY=true`.
+- **Evening (manual only; was 21:00 UTC)** — `--mode evening`: results for lots that ran today. Always sent — quiet days get a "No Results Today" notice. "Today" is the day of the 21:00 slot, not the wall clock when the runner starts — GitHub Actions cron is best-effort and a start delayed past UK midnight would otherwise report on a day that hasn't been raced (see `_results_run_date`).
 
 Source is Racing Post's bloodstock sale catalogue (the authoritative join between a lot and its race entry), supplemented by the live racecards index for any entries the catalogue's `entry_details` field hasn't been updated to reflect.
 
@@ -25,7 +25,7 @@ The catalogue JSON is authoritative for lot metadata (sire/dam, vendor, price, b
 
 ## Where it runs
 
-Production cron lives in **GitHub Actions**: `.github/workflows/daily.yml` schedules 04:00 and 21:00 UTC runs on `ubuntu-latest`. The workflow uses `curl_cffi` (Chrome 124 TLS/HTTP-2 fingerprint) to bypass Racing Post's Fastly bot filter from cloud IPs — a plain `requests` UA gets a challenge page back.
+Production cron lives in **GitHub Actions**: `.github/workflows/daily.yml` schedules the Friday 21:30 UTC weekly run on `ubuntu-latest` (the 04:00 and 21:00 UTC daily crons were removed on 26 Oct 2026; re-add them there to restore the daily emails). The workflow uses `curl_cffi` (Chrome 124 TLS/HTTP-2 fingerprint) to bypass Racing Post's Fastly bot filter from cloud IPs — a plain `requests` UA gets a challenge page back.
 
 To trigger a one-off run: **Actions → daily-breezeup-email → Run workflow**. Inputs cover date override, dry-run, demo mode (skips live RP fetch — handy for layout checks), mode override, entries window, and `notify_on_empty`.
 
@@ -84,7 +84,7 @@ src/dailybreezeup/
   templates/
     email.html.j2       # rendered HTML (inline silks via cid:)
 .github/workflows/
-  daily.yml             # 04:00 / 21:00 UTC cron + manual dispatch
+  daily.yml             # Friday 21:30 UTC weekly cron + manual dispatch
 data/
   breezeup.sqlite       # committed — run_log + email_log for dedup
 tests/
@@ -161,8 +161,10 @@ headings and per-sale-type icons), with the full list attached as a CSV.
 
 ### Where it runs
 
-`.github/workflows/salescatalogues.yml` — 06:00 UTC daily plus manual dispatch
-(date override, dry-run, notify-on-empty). Reuses the same Gmail secrets; set
+`.github/workflows/salescatalogues.yml` — 06:00 UTC every Monday plus manual
+dispatch (date override, dry-run, notify-on-empty). It was daily until 26 Oct
+2026; the workflow sets `ACTIVE_LEAD_DAYS=7` so every sale starting before the
+next digest is flagged Active. Reuses the same Gmail secrets; set
 `CATALOGUES_EMAIL_TO` to send the digest somewhere other than `EMAIL_TO`.
 tom.biggs only receives the Friday edition — see `_FRIDAY_ONLY_RECIPIENTS`
 in `salescatalogues/config.py`.
