@@ -1,0 +1,59 @@
+[
+{
+"type": "Auctionlot",
+"number": 1,
+"name": "01 - Aktivist",
+"vendor": "Gest\u00fct R\u00f6ttgen",
+"inFoalTo": null,
+"rel": {
+"name": "01 - Aktivist",
+"birthday": "Mon, 27 Feb 2023 19:40:51 +0100",
+"sex": "Colt",
+"color": "grey",
+"pedigree": {
+"v": "Victor Ludorum (GB)",
+"m": "Akribie",
+"mv": "Reliable Man",
+"mmv": "Haafhd"
+}
+}
+},
+{
+"type": "Auctionlot",
+"number": 2,
+"name": "02 - Divina Gloria (FR)",
+"vendor": "Challenger Racing",
+"inFoalTo": null,
+"rel": {
+"name": "02 - Divina Gloria (FR)",
+"birthday": "Mon, 03 Apr 2017 19:40:51 +0200",
+"sex": "Broodmare",
+"color": "bay",
+"pedigree": {
+"v": "Dabirsim (FR)",
+"m": "Amouage",
+"mv": "Exceed and Excel",
+"mmv": "Monsun"
+}
+}
+},
+{
+"type": "Auctionlot",
+"number": 3,
+"name": "03 - La Santa Monica",
+"vendor": "Stiftung Gest\u00fct F\u00e4hrhof",
+"inFoalTo": "Isfahan (GER)",
+"rel": {
+"name": "03 - La Santa Monica",
+"birthday": "Sat, 04 Mar 2023 19:40:51 +0100",
+"sex": "Broodmare",
+"color": "bay",
+"pedigree": {
+"v": "Space Blues (IRE)",
+"m": "La Sadira",
+"mv": "Cacique (IRE)",
+"mmv": ""
+}
+}
+}
+]

@@ -1,0 +1,134 @@
+name: gunrunner-weekly
+
+# Gun Runner Mare Prospects: every filly and mare catalogued worldwide in the
+# next ten weeks, scored as a Gun Runner mate, sent on a Friday with the PDF
+# (one page each) and the CSVs attached.
+#
+#   Fri 06:00 + 07:00 UTC - two crons so the send lands at 07:00 London in
+#                           summer and winter time. The guard keeps the one
+#                           that is 07:00 in London today, decided from which
+#                           cron fired, never the wall clock (GHA cron runs
+#                           late; a clock check would skip on those mornings).
+#   Wed 03:00 UTC         - warm run: fetches the sale catalogues, the backend
+#                           family pages and Equibase, and caches them, so
+#                           Friday's run is quick. No email.
+#
+# The enrichment cache (family pages, Equibase answers, silks) and the ledger
+# of horses already reported ("new this week") persist in the Actions cache.
+on:
+  schedule:
+    - cron: "0 6 * * 5"
+    - cron: "0 7 * * 5"
+    - cron: "0 3 * * 3"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "YYYY-MM-DD to run as (default: today UK)"
+        required: false
+      dry_run:
+        description: "Build the PDF and CSVs but do not send"
+        required: false
+        default: "true"
+      warm:
+        description: "Fill the caches only"
+        required: false
+        default: "false"
+
+concurrency:
+  group: gunrunner-weekly
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      TZ: Europe/London
+      GMAIL_USER:         ${{ secrets.GMAIL_USER }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      EMAIL_FROM:         ${{ secrets.EMAIL_FROM }}
+      # comma-separated; empty means racingsquared@gmail.com and greg@p2bloodstock.com
+      GUNRUNNER_EMAIL_TO: ${{ secrets.GUNRUNNER_EMAIL_TO }}
+      PARSE_BOT_API_KEY:  ${{ secrets.PARSE_BOT_API_KEY }}
+      GUNRUNNER_EQUIBASE_CREDITS: ${{ vars.GUNRUNNER_EQUIBASE_CREDITS || '1500' }}
+      # raced fillies and mares only to start; set the repo variable to "true" to
+      # add foals, yearlings and unraced stock (scored on family and forecast fit)
+      GUNRUNNER_INCLUDE_UNRACED: ${{ vars.GUNRUNNER_INCLUDE_UNRACED || 'false' }}
+
+    steps:
+      - name: Friday 07:00 London guard
+        id: guard
+        run: |
+          go=true
+          mode=send
+          slot="${{ github.event.schedule }}"
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            offset=$(date +%z)   # TZ is Europe/London: +0100 in BST, +0000 in GMT
+            if [ "$slot" = "0 3 * * 3" ]; then
+              mode=warm
+            elif ! { [ "$offset" = "+0100" ] && [ "$slot" = "0 6 * * 5" ]; } && \
+                 ! { [ "$offset" = "+0000" ] && [ "$slot" = "0 7 * * 5" ]; }; then
+              echo "Slot '$slot' is not 07:00 in London today (UTC$offset); the other cron covers it."
+              go=false
+            fi
+          fi
+          echo "go=$go" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.guard.outputs.go == 'true'
+
+      - uses: actions/setup-python@v5
+        if: steps.guard.outputs.go == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        if: steps.guard.outputs.go == 'true'
+        run: |
+          pip install -e ".[report]"
+          python -m playwright install --with-deps chromium
+
+      - name: Restore cache
+        if: steps.guard.outputs.go == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/gunrunner/cache.sqlite
+            data/gunrunner/catalogues.sqlite
+          key: gunrunner-v1-${{ github.run_id }}
+          restore-keys: |
+            gunrunner-v1-
+
+      - name: Run
+        if: steps.guard.outputs.go == 'true'
+        run: |
+          args=""
+          if [ -n "${{ github.event.inputs.date }}" ]; then args="$args --date ${{ github.event.inputs.date }}"; fi
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then args="$args --dry-run"; fi
+          if [ "${{ github.event.inputs.warm }}" = "true" ] || [ "${{ steps.guard.outputs.mode }}" = "warm" ]; then
+            args="$args --warm"
+          fi
+          python -m gunrunner.daily $args
+
+      - name: Job summary
+        if: always() && steps.guard.outputs.go == 'true'
+        run: |
+          f=$(ls -t data/gunrunner/out/*/summary.json 2>/dev/null | head -1)
+          {
+            echo "## Gun Runner Mare Prospects"
+            if [ -n "$f" ]; then
+              echo '```json'
+              python -c "import json,sys; d=json.load(open(sys.argv[1])); d.pop('sales', None); print(json.dumps(d, indent=1))" "$f"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload output
+        if: always() && steps.guard.outputs.go == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gunrunner-${{ github.run_id }}
+          path: data/gunrunner/out/
+          if-no-files-found: ignore

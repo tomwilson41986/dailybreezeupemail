@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
+import unicodedata
 from datetime import date
 
 import lxml.html
@@ -89,9 +90,11 @@ def parse_lots(html: str) -> list[Lot]:
         # Unnamed lots render as "N(DAM YYYY)"; blank them.
         if name.upper().startswith("N(") or name.upper() == "UNNAMED":
             name = ""
-        dam_el = item.cssselect('div[data-label="Mère"] p, div[data-label="Mère"]')
-        dam = squash(dam_el[0].text_content()) if dam_el else ""
+        cells = _cells(item)
+        dam = cells.get("mere", "")
         sex_raw = _lot_field(item, "lot_sexe")
+        link = item.cssselect('div[data-label="Lot"] a')
+        href = link[0].get("href") if link else ""
         lots.append(
             Lot(
                 lot_no=lot_no,
@@ -100,9 +103,29 @@ def parse_lots(html: str) -> list[Lot]:
                 sire=_lot_field(item, "lot_pere"),
                 dam=dam,
                 vendor=_lot_field(item, "lot_vendeur"),
+                covering_sire=cells.get("pleine de", ""),
+                # the product: Maiden, Poulinière, Foal, Yearling, Cheval à l'entraînement...
+                lot_type=_lot_field(item, "lot_prod") or cells.get("produit", ""),
+                url=f"https://www.arqana.com/{href.lstrip('/')}" if href and not href.startswith("http") else href,
             )
         )
     return lots
+
+
+def _fold(s: str) -> str:
+    """"Mère" -> "mere": labels compared without accents or case."""
+    return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c)).lower().strip()
+
+
+def _cells(item) -> dict[str, str]:
+    """Each grid cell by its folded ``data-label``, read from the cell's ``title``
+    (the full text) or its text."""
+    out: dict[str, str] = {}
+    for div in item.cssselect("div[data-label]"):
+        p = div.cssselect("p")
+        val = (p[0].get("title") if p and p[0].get("title") is not None else div.text_content()) or ""
+        out[_fold(div.get("data-label") or "")] = squash(val)
+    return out
 
 
 def fetch_lots(raw: RawSale, session=None) -> list[Lot]:

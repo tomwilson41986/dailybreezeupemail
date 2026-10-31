@@ -42,12 +42,17 @@ dev = [
 xlsx = [
   "openpyxl>=3.1",
 ]
+# gunrunner-weekly: the PDF (headless Chromium) and the HRN silks
+report = [
+  "playwright>=1.45",
+]
 
 [project.scripts]
 breezeup-daily = "dailybreezeup.daily:main"
 barriertrials-daily = "barriertrials.daily:main"
 salescatalogues-daily = "salescatalogues.daily:main"
 wathnan-daily = "wathnan.cli:main"
+gunrunner-weekly = "gunrunner.daily:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -59,6 +64,7 @@ salescatalogues = ["schema.sql", "templates/*.j2"]
 # The runners PDF ships its own fonts and brand marks, plus the canonical
 # name / country / roster registries it reconciles feeds against.
 wathnan = ["assets/*.png", "assets/fonts/*.ttf", "data/*.json"]
+gunrunner = ["assets/*.png"]
 
 [tool.ruff]
 line-length = 100

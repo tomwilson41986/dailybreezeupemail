@@ -74,10 +74,13 @@ def parse_lots(data: dict) -> list[Lot]:
         alpha = (hip.get("field_hip_alpha") or "").strip()
         if not hip_no and not alpha:
             continue
+        title = (hip.get("title") or "").strip()
+        yob = re.search(r"(\d{4})", hip.get("field_foaling_date") or hip.get("field_dob") or "")
         lots.append(
             Lot(
                 lot_no=f"{hip_no}{alpha}",
-                horse_name=(hip.get("title") or "").strip(),
+                # an unnamed hip is titled "Hip 0001"
+                horse_name="" if re.match(r"^Hip\s*\d", title) else title,
                 sex=(hip.get("field_sex") or "").strip(),
                 colour=(hip.get("field_color") or "").strip(),
                 sire=(hip.get("field_sire") or "").strip(),
@@ -86,9 +89,34 @@ def parse_lots(data: dict) -> list[Lot]:
                 vendor=(
                     hip.get("field_consignor_name") or hip.get("field_consignor") or ""
                 ).strip(),
+                yob=int(yob.group(1)) if yob else None,
+                covering_sire=(hip.get("field_covering_sire") or "").strip(),
+                lot_type=(hip.get("field_sold_as") or "").strip(),
+                breeding_status=(hip.get("field_breeding_status") or "").strip(),
+                withdrawn=hip.get("field_out") == "Y",
+                url=(hip.get("field_pedigree") or "").strip(),
             )
         )
     return lots
+
+
+# The catalogue page names the feed its table is built from ("sale_id":"133"):
+# catalog-backend.keeneland.com/.../json_hde/sale_data_<n>.json, every hip.
+# The page also lists other sales' ids, so read the one in this sale's own records.
+_FEED_ID_RES = (
+    re.compile(r'keSaleData\\?":\{\\?"sale_id\\?":\\?"?(\d+)'),
+    re.compile(r'keeneland_sale_code\\?":\\?"\d+\\?",\\?"sale_id\\?":\\?"(\d+)'),
+)
+FEED_URL = "https://catalog-backend.keeneland.com/sites/default/files/json_hde/sale_data_{n}.json"
+
+
+def _feed_lots(raw: RawSale, session) -> list[Lot]:
+    page = get_text(session, raw.url.rstrip("/") + "/catalog-table/")
+    m = next((m for rx in _FEED_ID_RES if (m := rx.search(page))), None)
+    if not m:
+        return []
+    data = get_json(session, FEED_URL.format(n=m.group(1)))
+    return parse_lots(data) if isinstance(data, dict) else []
 
 
 def fetch_lots(raw: RawSale, session=None) -> list[Lot]:
@@ -98,10 +126,17 @@ def fetch_lots(raw: RawSale, session=None) -> list[Lot]:
     try:
         data = get_json(session, LOTS_API.format(sale_id=raw.catalogue_ref))
     except Exception as exc:  # noqa: BLE001
+        log.info("Keeneland sale API empty or failed (sale %s): %s", raw.catalogue_ref, exc)
+        data = None
+    lots = parse_lots(data) if isinstance(data, dict) else []
+    if lots:
+        return lots
+    # The sale API answers 200 with an empty body; the catalogue page's own feed has the hips.
+    try:
+        return _feed_lots(raw, session)
+    except Exception as exc:  # noqa: BLE001
         log.warning("Keeneland lot fetch failed (sale %s): %s", raw.catalogue_ref, exc)
         return []
-    # Empty body (200 + "") means the catalogue isn't published yet.
-    return parse_lots(data) if isinstance(data, dict) else []
 
 
 def fetch(session=None, *, ref: date | None = None) -> list[RawSale]:

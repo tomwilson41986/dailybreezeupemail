@@ -1,0 +1,44 @@
+{
+"information": {
+"auction": {
+"uuid": "6c8fb526-3b76-4612-b754-1329c30eb591"
+},
+"listings": {
+"1f33566a-f696-4ea5-8eb6-b25a751b589d": {
+"uuid": "1f33566a-f696-4ea5-8eb6-b25a751b589d",
+"id": 1002688,
+"auctionIndex": 20,
+"title": "Babyfaced Assassin (AUS)",
+"description": "%7B&quot;name&quot;:&quot;Babyfaced Assassin (AUS)&quot;,&quot;vendor&quot;:&quot;Portelli Racing&quot;,&quot;category&quot;:&quot;SH&quot;,&quot;categoryLong&quot;:&quot;Share&quot;,&quot;sire&quot;:&quot;I Am Invincible (AUS)&quot;,&quot;dam&quot;:&quot;Silently (AUS)&quot;,&quot;damSire&quot;:&quot;Anabaa (USA)&quot;,&quot;sex&quot;:&quot;G&quot;,&quot;dob&quot;:&quot;2021-10-03T00:00:00&quot;,&quot;age&quot;:5,&quot;country&quot;:&quot;AUS&quot;,&quot;colour&quot;:&quot;Bay&quot;,&quot;foalAtFoot&quot;:0,&quot;foalSex&quot;:&quot;&quot;,&quot;foalDob&quot;:&quot;&quot;,&quot;foalColour&quot;:&quot;&quot;,&quot;sireOfFoal&quot;:&quot;&quot;,&quot;coveringStallion&quot;:&quot;&quot;,&quot;lastService&quot;:&quot;&quot;,&quot;inFoal&quot;:0,&quot;incentiveScheme&quot;:&quot;&quot;,&quot;sharePercent&quot;:10,&quot;hasVetReport&quot;:0,&quot;hasXrays&quot;:0,&quot;hasScopeVideo&quot;:0,&quot;defects&quot;:&quot;Hendra Virus - Vaccinated&quot;,&quot;taxPercent&quot;:0,&quot;miscFiles&quot;:[],&quot;status&quot;:&quot;PASSED IN&quot;,&quot;chksum&quot;:&quot;C11554DC2524A6EB93C6425B76A3F3F0&quot;,&quot;imgChksum&quot;:&quot;d13fb643a70d750cb10ca4f8bb7ebfb6&quot;%7D"
+},
+"20cd991e-0d29-4f88-b730-63e81450acf2": {
+"uuid": "20cd991e-0d29-4f88-b730-63e81450acf2",
+"id": 1002676,
+"auctionIndex": 8,
+"title": "Unnamed",
+"description": "%7B&quot;name&quot;:&quot;Unnamed&quot;,&quot;vendor&quot;:&quot;Broadmarsh Stud&quot;,&quot;category&quot;:&quot;RF&quot;,&quot;categoryLong&quot;:&quot;Racehorse Filly/Mare&quot;,&quot;sire&quot;:&quot;Levendi (AUS)&quot;,&quot;dam&quot;:&quot;Somerset (AUS)&quot;,&quot;damSire&quot;:&quot;Matsqui (AUS)&quot;,&quot;sex&quot;:&quot;M&quot;,&quot;dob&quot;:&quot;2022-11-19T00:00:00&quot;,&quot;age&quot;:4,&quot;country&quot;:&quot;AUS&quot;,&quot;colour&quot;:&quot;Bay or Brown&quot;,&quot;foalAtFoot&quot;:0,&quot;foalSex&quot;:&quot;&quot;,&quot;foalDob&quot;:&quot;&quot;,&quot;foalColour&quot;:&quot;&quot;,&quot;sireOfFoal&quot;:&quot;&quot;,&quot;coveringStallion&quot;:&quot;&quot;,&quot;lastService&quot;:&quot;&quot;,&quot;inFoal&quot;:0,&quot;incentiveScheme&quot;:&quot;&quot;,&quot;sharePercent&quot;:100,&quot;hasVetReport&quot;:0,&quot;hasXrays&quot;:0,&quot;hasScopeVideo&quot;:0,&quot;defects&quot;:&quot;&quot;,&quot;taxPercent&quot;:100,&quot;miscFiles&quot;:[],&quot;status&quot;:&quot;SOLD&quot;,&quot;chksum&quot;:&quot;3C666B6AF7B8E3ACCA63E26EA64965F6&quot;,&quot;imgChksum&quot;:&quot;538f221a5bbb67c81413f299d4b55889&quot;%7D"
+},
+"95bf2bac-3e2f-4889-95a8-681345e995f4": {
+"uuid": "95bf2bac-3e2f-4889-95a8-681345e995f4",
+"id": 1002700,
+"auctionIndex": 32,
+"title": "Unnamed",
+"description": "%7B&quot;name&quot;:&quot;Unnamed&quot;,&quot;vendor&quot;:&quot;Broadmarsh Stud&quot;,&quot;category&quot;:&quot;U&quot;,&quot;categoryLong&quot;:&quot;Unbroken&quot;,&quot;sire&quot;:&quot;Levendi (AUS)&quot;,&quot;dam&quot;:&quot;Silverware (AUS)&quot;,&quot;damSire&quot;:&quot;Dalakhani (IRE)&quot;,&quot;sex&quot;:&quot;F&quot;,&quot;dob&quot;:&quot;2024-08-25T00:00:00&quot;,&quot;age&quot;:2,&quot;country&quot;:&quot;AUS&quot;,&quot;colour&quot;:&quot;Brown&quot;,&quot;foalAtFoot&quot;:0,&quot;foalSex&quot;:&quot;&quot;,&quot;foalDob&quot;:&quot;&quot;,&quot;foalColour&quot;:&quot;&quot;,&quot;sireOfFoal&quot;:&quot;&quot;,&quot;coveringStallion&quot;:&quot;&quot;,&quot;lastService&quot;:&quot;&quot;,&quot;inFoal&quot;:0,&quot;incentiveScheme&quot;:&quot;&quot;,&quot;sharePercent&quot;:100,&quot;hasVetReport&quot;:0,&quot;hasXrays&quot;:0,&quot;hasScopeVideo&quot;:0,&quot;defects&quot;:&quot;&quot;,&quot;taxPercent&quot;:100,&quot;miscFiles&quot;:[],&quot;status&quot;:&quot;SOLD&quot;,&quot;chksum&quot;:&quot;A70FADFA3AB42C7936FA8372CDA32734&quot;,&quot;imgChksum&quot;:&quot;7209a54c433f34b57d652b5eeee0c2e4&quot;%7D"
+},
+"2d4da654-eabb-4eb5-97c5-cf5908182920": {
+"uuid": "2d4da654-eabb-4eb5-97c5-cf5908182920",
+"id": 1002668,
+"auctionIndex": 0,
+"title": "Dummy Lot",
+"description": "%7B%7D"
+},
+"daa334bc-5417-4434-ab33-ae477fed5963": {
+"uuid": "daa334bc-5417-4434-ab33-ae477fed5963",
+"id": 1002720,
+"auctionIndex": 52,
+"title": "Lickedy (AUS)",
+"description": "%7B&quot;name&quot;:&quot;Lickedy (AUS)&quot;,&quot;vendor&quot;:&quot;Owners&quot;,&quot;category&quot;:&quot;B&quot;,&quot;categoryLong&quot;:&quot;Broodmare&quot;,&quot;sire&quot;:&quot;Starcraft (NZ)&quot;,&quot;dam&quot;:&quot;Luscillas Choice (AUS)&quot;,&quot;damSire&quot;:&quot;Redoute's Choice (AUS)&quot;,&quot;sex&quot;:&quot;M&quot;,&quot;dob&quot;:&quot;2018-09-09T00:00:00&quot;,&quot;age&quot;:8,&quot;country&quot;:&quot;AUS&quot;,&quot;colour&quot;:&quot;Bay&quot;,&quot;foalAtFoot&quot;:0,&quot;foalSex&quot;:&quot;&quot;,&quot;foalDob&quot;:&quot;&quot;,&quot;foalColour&quot;:&quot;&quot;,&quot;sireOfFoal&quot;:&quot;&quot;,&quot;coveringStallion&quot;:&quot;Portland Sky (AUS)&quot;,&quot;lastService&quot;:&quot;2025-11-28T00:00:00&quot;,&quot;inFoal&quot;:0,&quot;incentiveScheme&quot;:&quot;&quot;,&quot;sharePercent&quot;:100,&quot;hasVetReport&quot;:0,&quot;hasXrays&quot;:0,&quot;hasScopeVideo&quot;:0,&quot;defects&quot;:&quot;&quot;,&quot;taxPercent&quot;:100,&quot;miscFiles&quot;:[],&quot;status&quot;:&quot;PASSED IN&quot;,&quot;chksum&quot;:&quot;01E6F7F38151A6A1A204F818A35EA3BC&quot;,&quot;imgChksum&quot;:&quot;e3c69f2dbd678ef6cf73d1cacfe75d03&quot;%7D"
+}
+}
+}
+}
