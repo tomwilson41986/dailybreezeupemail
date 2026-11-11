@@ -88,6 +88,15 @@ jobs:
       - name: Build and send the report
         if: steps.gate.outputs.due == 'true'
         run: |
+          # wathnan-daily already returns exit code 2 when the email fails
+          # to send (see MailError handling in cli.py). Piping its output to
+          # `tee` would normally throw that away -- bash reports the exit
+          # status of the LAST command in a pipeline, which is tee's, and
+          # tee always succeeds. That let every send failure since 31 Oct
+          # report "success" here for 12 straight days while mail silently
+          # stopped going out. `pipefail` makes the pipeline fail whenever
+          # either command does.
+          set -o pipefail
           args="--days-ahead ${DAYS_AHEAD} --no-browser --verbose"
           if [ "${{ github.event_name }}" = "schedule" ] || \
              [ "${{ github.event.inputs.email }}" = "true" ]; then
